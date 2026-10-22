@@ -1,0 +1,8 @@
+# Automatic HTTPS via Let's Encrypt once DNS for {$DOMAIN} points at the VPS.
+# Caddy overwrites X-Forwarded-For with the real client IP (no trusted_proxies configured),
+# which the login rate limiter relies on.
+{$DOMAIN} {
+	encode zstd gzip
+	header Strict-Transport-Security "max-age=31536000"
+	reverse_proxy web:3000
+}

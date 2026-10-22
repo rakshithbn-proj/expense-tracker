@@ -1,0 +1,62 @@
+# Production stack for the VPS. Values come from a `.env` file next to this file (see deploy/.env.production.example).
+# The background worker is added in Milestone 4.
+
+services:
+  db:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: expense
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: expense_tracker
+    volumes:
+      # postgres:18 images keep data under /var/lib/postgresql/18/docker
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U expense -d expense_tracker"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    # Not published: only reachable from the other containers.
+
+  migrate:
+    build: .
+    command: ["npm", "run", "db:migrate"]
+    environment:
+      DATABASE_URL: postgres://expense:${POSTGRES_PASSWORD}@db:5432/expense_tracker
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  web:
+    build: .
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgres://expense:${POSTGRES_PASSWORD}@db:5432/expense_tracker
+      APP_ORIGIN: https://${DOMAIN:?set DOMAIN in .env}
+      LOG_LEVEL: info
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMAIN: ${DOMAIN}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - web
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:
