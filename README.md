@@ -11,7 +11,8 @@ coverage honestly.
 | 0 Feasibility | Done. See the documents below |
 | 1 Foundation | Done. Auth, PWA shell, Postgres + migrations, tests, CI and Docker files |
 | 2 Financial data model | Done. Accounts, categories, rules, transactions, budgets, accounting rules, JSON API, sample seed |
-| 3–9 | Not started. Screens show "Not built yet" instead of sample figures |
+| 3 Dashboard and explorer | Done. Overview, transaction explorer and detail, manual entry, 14 reports, budgets, settings |
+| 4–9 | Not started. Automation and Alerts screens show "Not built yet"; coverage and reconciliation reports say they can't be measured yet |
 
 Not verified yet: the Docker image has never been built (there's no Docker on the dev machine,
 see ADR-0002). Its first build happens in GitHub Actions or on the VPS.
@@ -55,6 +56,20 @@ npm.cmd run db:seed:sample -- --remove  # deletes exactly the sample rows, nothi
 
 Everything seeded is flagged `is_sample` with capture method `sample`, so it can never be
 mistaken for real data or counted as captured. The seed refuses to run when `NODE_ENV=production`.
+
+### Screens
+
+| Page | What it shows |
+|---|---|
+| Overview `/` | Net spending (with gross, refunds, pending), budgets, month-to-date line vs last month, categories, merchants, payment methods, weekday pattern, recent transactions, refunds and reversals, insights, capture sources |
+| Transactions `/transactions` | Search and filters (date, category, account, method, app, amount, status, type, capture method, review), detail with provenance, links, audited corrections, rule creation, voiding, history; manual entry at `/transactions/new` |
+| Reports `/reports` | Categories, month to month, merchants, accounts and cards, UPI vs cards, daily and weekly, recurring payments, budgets, cash flow, investments, refunds and reversals, capture coverage, reconciliation, insights. Each states what it includes |
+| Budgets `/budgets` | Monthly limits overall and per category, warning thresholds, suggestions you approve one by one |
+| Settings `/settings` | Accounts and cards (last digits only), categories, category rules |
+
+Every figure comes from the same accounting functions (ADR-0006). Insights and budget
+suggestions only appear with three months of history, and coverage is not shown until
+statements can be imported (Milestone 6).
 
 ### API (session cookie; writes must come from this site)
 

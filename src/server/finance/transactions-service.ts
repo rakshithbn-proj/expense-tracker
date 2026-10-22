@@ -16,7 +16,7 @@ import {
 import { decimalToPaise, paiseToDecimal } from "@/lib/money";
 import { recordAudit } from "@/server/audit";
 import type { Database } from "@/server/db/client";
-import { financialAccounts, transactions } from "@/server/db/schema";
+import { auditEvents, financialAccounts, transactions } from "@/server/db/schema";
 import { DomainError, NotFoundError } from "@/server/errors";
 import { summarize, type LedgerTransaction, type ParentInfo, type PeriodSummary } from "./accounting";
 import { assertCategoryOwned, getSystemCategoryId } from "./categories-service";
@@ -754,14 +754,51 @@ export async function unlinkTransaction(db: Database, userId: string, id: string
   });
 }
 
-// Suggestions for the review screen. Nothing is changed.
+// Suggestions for the review screen. Nothing is changed, and the user decides.
 export async function suggestLinks(db: Executor, userId: string, id: string) {
   const row = await requireRow(db, userId, id);
-  const refunds =
-    row.transactionType === "refund" || row.transactionType === "reversal"
-      ? scoreRefundCandidates(toMatchable(row), await refundCandidates(db, userId, row))
-      : [];
-  return { refundCandidates: refunds.slice(0, 5) };
+  const undo = row.transactionType === "refund" || row.transactionType === "reversal";
+  const refunds = undo && !row.parentTransactionId ? scoreRefundCandidates(toMatchable(row), await refundCandidates(db, userId, row)) : [];
+
+  // Possible other sides of an own-account transfer: same amount, opposite direction,
+  // a different account of the user's, within a few days.
+  let transferCandidates: Row[] = [];
+  if (!undo && !row.transferGroupId && !row.parentTransactionId && row.financialAccountId && !row.voidedAt) {
+    transferCandidates = await db
+      .select()
+      .from(transactions)
+      .where(
+        and(
+          eq(transactions.userId, userId),
+          eq(transactions.amount, row.amount),
+          ne(transactions.direction, row.direction),
+          ne(transactions.financialAccountId, row.financialAccountId),
+          isNull(transactions.voidedAt),
+          isNull(transactions.transferGroupId),
+          isNull(transactions.parentTransactionId),
+          gte(transactions.transactionDate, addDays(row.transactionDate, -TRANSFER_WINDOW_DAYS)),
+          lte(transactions.transactionDate, addDays(row.transactionDate, TRANSFER_WINDOW_DAYS)),
+        ),
+      )
+      .limit(5);
+  }
+
+  const byId = refunds.length
+    ? new Map((await db.select().from(transactions).where(and(eq(transactions.userId, userId), inArray(transactions.id, refunds.map((r) => r.id))))).map((r) => [r.id, r]))
+    : new Map<string, Row>();
+  return {
+    refundCandidates: refunds.slice(0, 5).map((c) => ({ ...c, transaction: toDto(byId.get(c.id)!) })),
+    transferCandidates: transferCandidates.filter((c) => c.transactionStatus !== "failed" && c.transactionStatus !== "reversed").map(toDto),
+  };
+}
+
+export async function transactionHistory(db: Executor, userId: string, id: string) {
+  await requireRow(db, userId, id);
+  return db
+    .select({ action: auditEvents.action, metadata: auditEvents.metadata, createdAt: auditEvents.createdAt })
+    .from(auditEvents)
+    .where(and(eq(auditEvents.userId, userId), eq(auditEvents.entityType, "transaction"), eq(auditEvents.entityId, id)))
+    .orderBy(desc(auditEvents.createdAt), desc(auditEvents.id));
 }
 
 // ---------------------------------------------------------------------------

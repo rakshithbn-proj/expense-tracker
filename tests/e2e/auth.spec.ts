@@ -50,7 +50,7 @@ test.describe("sign in", () => {
 
     await expect(page).toHaveURL(/\/$/);
     await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
-    await expect(page.getByText("Not built yet · Milestone 3")).toBeVisible();
+    await expect(page.getByTestId("net-spending")).toBeVisible();
 
     const cookie = (await context.cookies()).find((c) => c.name === "__Host-et_session");
     expect(cookie?.httpOnly).toBe(true);

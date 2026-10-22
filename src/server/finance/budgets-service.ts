@@ -1,5 +1,5 @@
 import "server-only";
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { isValidMonth } from "@/lib/dates";
 import { decimalToPaise, paiseToDecimal } from "@/lib/money";
 import { recordAudit } from "@/server/audit";
@@ -50,6 +50,15 @@ export async function setBudget(
     metadata: { categoryId: input.categoryId, fromMonth: input.fromMonth, limit: values.limitAmount },
   });
   return row;
+}
+
+// Budgets are settings, not financial records: removing one deletes its rows (audited).
+export async function removeBudget(db: Executor, userId: string, categoryId: string | null) {
+  const deleted = await db
+    .delete(budgets)
+    .where(and(eq(budgets.userId, userId), categoryId ? eq(budgets.categoryId, categoryId) : isNull(budgets.categoryId)))
+    .returning({ id: budgets.id });
+  await recordAudit(db, { userId, entityType: "budget", entityId: categoryId ?? "overall", action: "remove", metadata: { rows: deleted.length } });
 }
 
 export async function listBudgets(db: Executor, userId: string) {

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireUser } from "@/server/auth/dal";
 import { logout } from "./actions";
 import { SideNav, TabBar } from "./nav";
@@ -19,6 +20,9 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
             <span className="hidden opacity-80 sm:inline" data-testid="signed-in-as">
               {user.email}
             </span>
+            <Link href="/settings" className="rounded-lg border border-current/30 px-3 py-1.5 font-medium md:hidden">
+              Settings
+            </Link>
             <form action={logout}>
               <button type="submit" className="rounded-lg border border-current/30 px-3 py-1.5 font-medium">
                 Sign out

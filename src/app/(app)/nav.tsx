@@ -11,6 +11,12 @@ const items = [
   { href: "/notifications", label: "Alerts", icon: "M6 16V11a6 6 0 0112 0v5l2 2H4l2-2zM10 21h4" },
 ] as const;
 
+// Desktop sidebar only; on phones these are reached from the header and the Overview.
+const secondary = [
+  { href: "/budgets", label: "Budgets", icon: "M4 19h16M6 15V9M12 15V5M18 15v-3" },
+  { href: "/settings", label: "Settings", icon: "M12 8a4 4 0 100 8 4 4 0 000-8zM12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4L7 17M17 7l1.4-1.4" },
+] as const;
+
 function isActive(pathname: string, href: string) {
   return href === "/" ? pathname === "/" : pathname.startsWith(href);
 }
@@ -27,7 +33,7 @@ export function SideNav() {
   const pathname = usePathname();
   return (
     <nav aria-label="Main" className="flex flex-col gap-1">
-      {items.map((item) => (
+      {[...items, ...secondary].map((item) => (
         <Link
           key={item.href}
           href={item.href}

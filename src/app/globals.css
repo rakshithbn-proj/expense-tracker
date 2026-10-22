@@ -9,6 +9,20 @@
   --brand: #0b4f6c;
   --brand-contrast: #ffffff;
   --danger: #b42318;
+  --success: #006300;
+
+  /* Charts: dataviz reference slots 1 and 2, validated against these surfaces in both modes. */
+  --series-1: #2a78d6;
+  --series-compare: #eb6834;
+  --series-1-wash: rgba(42, 120, 214, 0.1);
+  --grid: #e1e0d9;
+  --axis: #c3c2b7;
+  --ink-muted: #898781;
+  /* Status colours are reserved for state and always paired with an icon and label. */
+  --status-good: #0ca30c;
+  --status-warning: #fab219;
+  --status-critical: #d03b3b;
+  --track: #e6ecf3;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -21,6 +35,13 @@
     --brand: #4fb3d9;
     --brand-contrast: #06212d;
     --danger: #f97066;
+    --success: #0ca30c;
+    --series-1: #3987e5;
+    --series-compare: #d95926;
+    --series-1-wash: rgba(57, 135, 229, 0.12);
+    --grid: #2c2c2a;
+    --axis: #383835;
+    --track: #1f2b38;
   }
 }
 
@@ -33,6 +54,11 @@
   --color-brand: var(--brand);
   --color-brand-contrast: var(--brand-contrast);
   --color-danger: var(--danger);
+  --color-success: var(--success);
+  --color-series-1: var(--series-1);
+  --color-series-compare: var(--series-compare);
+  --color-track: var(--track);
+  --color-ink-muted: var(--ink-muted);
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial,
     sans-serif;
 }
