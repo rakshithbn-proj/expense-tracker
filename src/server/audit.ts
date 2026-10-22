@@ -1,9 +1,9 @@
 import "server-only";
-import type { Database } from "@/server/db/client";
+import type { Executor } from "@/server/finance/db-types";
 import { auditEvents } from "@/server/db/schema";
 
 export async function recordAudit(
-  database: Database,
+  database: Executor,
   event: {
     userId: string | null;
     entityType: string;

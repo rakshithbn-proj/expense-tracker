@@ -32,6 +32,16 @@ describe("migrations", () => {
       "select tablename from pg_tables where schemaname = 'public' order by tablename",
     );
     await client.end();
-    expect(rows.map((r) => r.tablename)).toEqual(["audit_events", "login_attempts", "sessions", "users"]);
+    expect(rows.map((r) => r.tablename)).toEqual([
+      "audit_events",
+      "budgets",
+      "categories",
+      "category_rules",
+      "financial_accounts",
+      "login_attempts",
+      "sessions",
+      "transactions",
+      "users",
+    ]);
   });
 });

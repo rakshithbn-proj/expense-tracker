@@ -16,7 +16,8 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx --conditions=react-server scripts/migrate.ts",
     "user:create": "tsx --conditions=react-server scripts/user.ts create",
-    "user:reset-password": "tsx --conditions=react-server scripts/user.ts reset-password"
+    "user:reset-password": "tsx --conditions=react-server scripts/user.ts reset-password",
+    "db:seed:sample": "tsx --conditions=react-server scripts/seed-sample.ts"
   },
   "dependencies": {
     "@node-rs/argon2": "^2.2.2",

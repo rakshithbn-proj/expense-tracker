@@ -5,6 +5,7 @@ import { users } from "@/server/db/schema";
 import { recordAudit } from "@/server/audit";
 import { hashPassword, MIN_PASSWORD_LENGTH } from "@/server/auth/password";
 import { invalidateAllUserSessions } from "@/server/auth/session";
+import { ensureDefaultCategories } from "@/server/finance/categories-service";
 
 export function validateNewPassword(password: string): string | null {
   if (password.length < MIN_PASSWORD_LENGTH) {
@@ -26,6 +27,7 @@ export async function createOwner(database: Database, email: string, password: s
     .values({ email: email.trim().toLowerCase(), passwordHash: await hashPassword(password) })
     .returning({ id: users.id, email: users.email });
   await recordAudit(database, { userId: user.id, entityType: "user", entityId: user.id, action: "create" });
+  await ensureDefaultCategories(database, user.id);
   return user;
 }
 
