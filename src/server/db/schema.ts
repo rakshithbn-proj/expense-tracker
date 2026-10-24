@@ -308,6 +308,26 @@ export const gmailConnections = pgTable("gmail_connections", {
   ...timestamps,
 });
 
+// Revocable keys for iPhone Shortcuts (Milestone 5). Only a SHA-256 hash is stored; the key is
+// shown once when created. A key can only submit transactions to the ingestion endpoint.
+export const deviceKeys = pgTable(
+  "device_keys",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    keyHash: text("key_hash").notNull().unique(),
+    // First characters of the key, shown in the UI so the user can tell keys apart.
+    keyPrefix: text("key_prefix").notNull(),
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("device_keys_user_idx").on(t.userId)],
+);
+
 export const sourceHealth = pgTable(
   "source_health",
   {

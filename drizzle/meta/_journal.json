@@ -22,6 +22,13 @@
       "when": 1792659181190,
       "tag": "0002_capture_sources",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1792820700374,
+      "tag": "0003_device_keys",
+      "breakpoints": true
     }
   ]
 }

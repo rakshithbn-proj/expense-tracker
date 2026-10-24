@@ -14,7 +14,8 @@ export function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    // Everything except public assets, the login page and the health check.
-    "/((?!_next/static|_next/image|favicon.ico|sw.js|offline.html|manifest.webmanifest|icon|apple-icon|pwa-icons|login|api/health).*)",
+    // Everything except public assets, the login page, the health check and the device-key
+    // ingestion endpoint (authenticated by its own key, not the browser session).
+    "/((?!_next/static|_next/image|favicon.ico|sw.js|offline.html|manifest.webmanifest|icon|apple-icon|pwa-icons|login|api/health|api/ingest).*)",
   ],
 };

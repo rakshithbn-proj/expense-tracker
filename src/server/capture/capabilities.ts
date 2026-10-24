@@ -1,7 +1,7 @@
 import "server-only";
 import { and, count, desc, eq, gte, inArray, isNotNull, like, max, sql } from "drizzle-orm";
 import type { Database } from "@/server/db/client";
-import { gmailConnections, sourceHealth, transactionSources, transactions } from "@/server/db/schema";
+import { deviceKeys, gmailConnections, sourceHealth, transactionSources, transactions } from "@/server/db/schema";
 import { gmailConfig } from "@/server/env";
 import { PARSERS } from "@/server/ingestion/email/registry";
 
@@ -66,6 +66,14 @@ export async function captureCapabilities(db: Database, userId: string): Promise
     .where(and(eq(transactionSources.userId, userId), eq(transactionSources.parseStatus, "parsed"), isNotNull(transactionSources.parserId)))
     .groupBy(transactionSources.parserId);
 
+  const activeKeys = await db
+    .select({ id: deviceKeys.id })
+    .from(deviceKeys)
+    .where(and(eq(deviceKeys.userId, userId), sql`${deviceKeys.revokedAt} is null`));
+  const lastQuickAdd = lastByParser.find((r) => r.parserId === "shortcut.quick_add")?.last ?? null;
+  const shortcutStatus = (built: boolean): CaptureStatus =>
+    activeKeys.length === 0 ? "Not configured" : built ? (lastQuickAdd ? "Tested successfully" : "Available for testing") : "Partially supported";
+
   const gmailStatus = (parserId: string): CaptureStatus => {
     if (!configured) return "Not configured";
     if (!conn || conn.status === "disconnected") return "Awaiting authorization";
@@ -113,6 +121,21 @@ export async function captureCapabilities(db: Database, userId: string): Promise
       limitations: "Needed for UPI payments made from bank accounts. Such emails are kept in the review queue until a parser exists.",
       status: "Partially supported",
     }),
+    {
+      ...fixed({
+        id: "iphone.quick_add",
+        name: "Quick Add from an iPhone Shortcut",
+        mechanism: "A Shortcut asks for amount, payee and app, then sends them to the app",
+        mode: "Manual",
+        permissions: "A revocable device key in the Shortcut (Settings)",
+        merchantAndAmount: "What you type",
+        reference: "None",
+        tested: lastQuickAdd ? "Used from your phone" : "Automated tests; not yet used from your phone",
+        limitations: "Typed by you, so it counts as manual entry, never as automatic capture.",
+        status: shortcutStatus(true),
+      }),
+      lastSuccessAt: lastQuickAdd,
+    },
     fixed({
       id: "iphone.sms",
       name: "Bank SMS via iPhone Shortcuts automation",
@@ -121,21 +144,23 @@ export async function captureCapabilities(db: Database, userId: string): Promise
       permissions: "A revocable device key in the Shortcut",
       merchantAndAmount: "Depends on each bank's SMS",
       reference: "Often (UPI reference)",
-      tested: "Not tested on your iPhone",
-      limitations: "Built in Milestone 5. Needs the on-device tests from the feasibility report.",
-      status: "Not built yet",
+      tested: "Endpoint tested; not yet tested from your iPhone",
+      limitations:
+        "SMS are received and kept (masked) in “Needs a look”, but no bank SMS format is parsed yet: none has been seen. The first ones you forward become the samples for parsers. Whether the automation runs without a tap must be checked on your iPhone.",
+      status: shortcutStatus(false),
     }),
     fixed({
       id: "iphone.share",
       name: "UPI app receipt shared to a Shortcut",
-      mechanism: "Share sheet → Shortcut → app",
+      mechanism: "Share sheet → Shortcut (Extract Text from Image) → app",
       mode: "User-triggered",
       permissions: "A revocable device key in the Shortcut",
       merchantAndAmount: "From the shared receipt",
       reference: "UPI transaction ID if visible",
-      tested: "Not tested",
-      limitations: "Needs a tap after paying. Built in Milestone 5.",
-      status: "Not built yet",
+      tested: "Endpoint tested; not yet tested from your iPhone",
+      limitations:
+        "Needs a tap after paying. Receipt text is kept (masked) for review until a PhonePe or Google Pay receipt format has been seen and a parser added.",
+      status: shortcutStatus(false),
     }),
     fixed({
       id: "upi.notifications",

@@ -26,13 +26,9 @@ async function main() {
   while (!stopping) {
     const started = Date.now();
     try {
-      const config = gmailConfig();
-      if (config) {
-        const result = await runCycle(db(), { config });
-        if (result.queued || result.processed) logger.info({ event: "worker_cycle", ...result, ms: Date.now() - started });
-      } else {
-        logger.debug({ event: "worker_idle", reason: "gmail_not_configured" });
-      }
+      // Without Gmail configured the worker still processes queued iPhone Shortcut items.
+      const result = await runCycle(db(), { config: gmailConfig() });
+      if (result.queued || result.processed) logger.info({ event: "worker_cycle", ...result, ms: Date.now() - started });
     } catch (err) {
       logger.error({ event: "worker_cycle_failed", err: err instanceof Error ? err.message : String(err) });
     }

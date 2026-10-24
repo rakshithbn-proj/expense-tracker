@@ -58,6 +58,10 @@ export function looksLikeTransaction(text: string, subject: string): boolean {
 
 // One-time passwords mean a payment was started, not completed; the bank sends a separate alert if
 // it goes through. They're never recorded and nothing from them is kept.
+// Only phrases that deliver a code count: genuine alerts often say "never share your OTP".
 export function isOtpMessage(text: string, subject: string): boolean {
-  return /\b(OTP|one[- ]time password)\b/i.test(subject) || /\bone[- ]time password\b|\bOTP\s*(?:is\b|:)/i.test(text);
+  return (
+    /\b(OTP|one[- ]time password)\b/i.test(subject) ||
+    /\bone[- ]time password\b|\bOTP\s*(?:is\b|:|for\b)|\bis (?:your|the) OTP\b/i.test(text)
+  );
 }

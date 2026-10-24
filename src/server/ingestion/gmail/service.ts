@@ -11,6 +11,8 @@ import { toAlertEmail } from "../email/gmail-message";
 import { gmailSenderQuery, KNOWN_SENDERS, parseAlert } from "../email/registry";
 import { recordHealth } from "../health";
 import { ingestEvent } from "../ingest";
+import { maskExcerpt } from "../mask";
+import { processShortcutRow } from "../shortcut/service";
 import { claimBatch, completeSource, enqueueSource, purgeExpiredPayloads, retryLater, type SourceRow } from "../queue";
 import { GmailAuthError, GmailClient, GmailTransientError, GMAIL_SCOPE, type FetchLike } from "./client";
 
@@ -20,6 +22,8 @@ const MAX_PAGES = 50;
 const UNRECOGNIZED_KEEP_MS = 7 * 86_400_000;
 
 export type GmailDeps = { config: GmailConfig; fetchImpl?: FetchLike; now?: () => Date };
+// Queue processing also handles non-Gmail items, so it works without Gmail configured.
+export type QueueDeps = { config: GmailConfig | null; fetchImpl?: FetchLike; now?: () => Date };
 type Connection = typeof gmailConnections.$inferSelect;
 
 export async function getConnection(db: Database, userId: string): Promise<Connection | null> {
@@ -125,14 +129,7 @@ export async function syncGmail(db: Database, userId: string, deps: GmailDeps): 
   }
 }
 
-// Long digit runs (card, account and reference numbers) are masked in kept excerpts.
-// Codes after "OTP", "password", "PIN" or "CVV" are blanked completely.
-export function maskExcerpt(text: string): string {
-  return text
-    .replace(/\b(OTP|one[- ]time password|password|PIN|CVV)(\W{0,12}(?:is\W{1,3})?)[\d•*]{3,}/gi, "$1$2••••")
-    .replace(/\d{5,}/g, (d) => "•".repeat(d.length - 4) + d.slice(-4))
-    .slice(0, 1500);
-}
+export { maskExcerpt };
 
 async function processGmailRow(db: Database, row: SourceRow, client: GmailClient, now: Date) {
   const message = await client.getMessage(row.sourceMessageId!, "full");
@@ -203,7 +200,7 @@ async function processGmailRow(db: Database, row: SourceRow, client: GmailClient
 }
 
 // Processes queued Gmail items. Each item is independent: one failure never blocks the rest.
-export async function processQueue(db: Database, deps: GmailDeps, limit = 25): Promise<{ processed: number; failed: number }> {
+export async function processQueue(db: Database, deps: QueueDeps, limit = 25): Promise<{ processed: number; failed: number }> {
   const now = deps.now?.() ?? new Date();
   const rows = await claimBatch(db, limit, now);
   const clients = new Map<string, GmailClient | null>();
@@ -211,14 +208,24 @@ export async function processQueue(db: Database, deps: GmailDeps, limit = 25): P
   let failed = 0;
 
   for (const row of rows) {
+    if (row.sourceType === "shortcut") {
+      try {
+        await processShortcutRow(db, row, undefined, now);
+        processed++;
+      } catch (err) {
+        failed++;
+        await retryLater(db, row, "processing_error", err instanceof Error ? err.message : String(err), now);
+      }
+      continue;
+    }
     if (row.sourceType !== "gmail") {
       await retryLater(db, row, "no_processor", "No processor for this source yet", now);
       continue;
     }
     try {
       if (!clients.has(row.userId)) {
-        const conn = await getConnection(db, row.userId);
-        clients.set(row.userId, conn && conn.status === "connected" ? clientFor(conn, deps) : null);
+        const conn = deps.config ? await getConnection(db, row.userId) : null;
+        clients.set(row.userId, conn && conn.status === "connected" ? clientFor(conn, { ...deps, config: deps.config! }) : null);
       }
       const client = clients.get(row.userId);
       if (!client) {
@@ -248,11 +255,15 @@ export async function processQueue(db: Database, deps: GmailDeps, limit = 25): P
   return { processed, failed };
 }
 
-// One worker cycle: sync every connected account, drain the queue, purge expired excerpts.
-export async function runCycle(db: Database, deps: GmailDeps) {
-  const connected = await db.select({ userId: gmailConnections.userId }).from(gmailConnections).where(eq(gmailConnections.status, "connected"));
+// One worker cycle: sync every connected Gmail account (when configured), drain the queue,
+// purge expired excerpts.
+export async function runCycle(db: Database, deps: QueueDeps) {
   let queued = 0;
-  for (const { userId } of connected) queued += (await syncGmail(db, userId, deps)).queued;
+  if (deps.config) {
+    const gmail = { ...deps, config: deps.config };
+    const connected = await db.select({ userId: gmailConnections.userId }).from(gmailConnections).where(eq(gmailConnections.status, "connected"));
+    for (const { userId } of connected) queued += (await syncGmail(db, userId, gmail)).queued;
+  }
   let processed = 0;
   for (let i = 0; i < 20; i++) {
     const r = await processQueue(db, deps);

@@ -5,7 +5,18 @@ import { requireUser } from "@/server/auth/dal";
 import { db } from "@/server/db/client";
 import { lookups } from "@/server/finance/reports-service";
 import { listRules } from "@/server/finance/rules-service";
-import { addAccountAction, addCategoryAction, toggleAccountAction, toggleRuleAction, updateCategoryAction } from "./actions";
+import { listDeviceKeys } from "@/server/ingestion/shortcut/keys";
+import { formatDateTime } from "@/lib/format";
+import { DeviceKeyCreator } from "./device-keys";
+import {
+  addAccountAction,
+  addCategoryAction,
+  createDeviceKeyAction,
+  revokeDeviceKeyAction,
+  toggleAccountAction,
+  toggleRuleAction,
+  updateCategoryAction,
+} from "./actions";
 
 export const metadata = { title: "Settings · Expenses" };
 
@@ -23,7 +34,7 @@ const linkButton = "text-sm text-muted underline";
 
 export default async function SettingsPage() {
   const user = await requireUser();
-  const [names, rules] = await Promise.all([lookups(db(), user.id), listRules(db(), user.id)]);
+  const [names, rules, keys] = await Promise.all([lookups(db(), user.id), listRules(db(), user.id), listDeviceKeys(db(), user.id)]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -104,6 +115,36 @@ export default async function SettingsPage() {
           </label>
         </ActionForm>
         <Definition>Deactivated categories keep their past transactions but aren&apos;t offered for new ones.</Definition>
+      </Card>
+
+      <Card title="iPhone Shortcut keys">
+        {keys.length > 0 && (
+          <ul className="mb-4 flex flex-col">
+            {keys.map((k) => (
+              <li key={k.id} className="flex flex-wrap items-center justify-between gap-2 border-t border-border py-2 text-sm first:border-t-0">
+                <span>
+                  <strong>{k.name}</strong> <span className="font-mono text-xs text-muted">{k.keyPrefix}…</span>
+                  <span className="block text-xs text-muted">
+                    Created {formatDateTime(k.createdAt.toISOString())} · {k.lastUsedAt ? `last used ${formatDateTime(k.lastUsedAt.toISOString())}` : "never used"}
+                  </span>
+                </span>
+                {k.revokedAt ? (
+                  <Badge>Revoked</Badge>
+                ) : (
+                  <ActionForm action={revokeDeviceKeyAction} submitLabel="Revoke" pendingLabel="Revoking…" buttonClassName={linkButton} className="flex">
+                    <input type="hidden" name="id" value={k.id} />
+                  </ActionForm>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+        <DeviceKeyCreator action={createDeviceKeyAction} />
+        <Definition>
+          A key lets a Shortcut on your phone send transactions to this app, and nothing else: it can&apos;t read your data. Only a fingerprint of
+          it is stored. It sits inside the Shortcut, so never share that Shortcut; if you do, or lose the phone, revoke the key here. Each key is
+          limited to 120 submissions an hour.
+        </Definition>
       </Card>
 
       <Card title="Category rules">

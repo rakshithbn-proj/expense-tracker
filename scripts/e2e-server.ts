@@ -33,7 +33,18 @@ async function main() {
 
   const next = spawn(process.execPath, [path.resolve("node_modules/next/dist/bin/next"), "start", "-p", PORT], {
     stdio: "inherit",
-    env: { ...process.env, NODE_ENV: "production", DATABASE_URL: pg.connectionString, APP_ORIGIN: `http://localhost:${PORT}`, LOG_LEVEL: "warn" },
+    env: {
+      ...process.env,
+      NODE_ENV: "production",
+      DATABASE_URL: pg.connectionString,
+      APP_ORIGIN: `http://localhost:${PORT}`,
+      LOG_LEVEL: "warn",
+      // Never use the developer's real Google credentials from .env.local: values set here take
+      // precedence over .env files, and empty means "not configured".
+      GOOGLE_CLIENT_ID: "",
+      GOOGLE_CLIENT_SECRET: "",
+      TOKEN_ENCRYPTION_KEY: "",
+    },
   });
 
   const shutdown = async () => {

@@ -37,6 +37,7 @@ describe("migrations", () => {
       "budgets",
       "categories",
       "category_rules",
+      "device_keys",
       "financial_accounts",
       "gmail_connections",
       "login_attempts",

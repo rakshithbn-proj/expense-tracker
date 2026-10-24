@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { flatten, htmlToText } from "@/server/ingestion/email/html-text";
 import { emailAddress, toAlertEmail } from "@/server/ingestion/email/gmail-message";
-import { istTimestamp, looksLikeTransaction, parseDayFirst, parseMonthName } from "@/server/ingestion/email/parse-helpers";
+import { istTimestamp, isOtpMessage, looksLikeTransaction, parseDayFirst, parseMonthName } from "@/server/ingestion/email/parse-helpers";
 import { gmailSenderQuery, parseAlert, PARSERS } from "@/server/ingestion/email/registry";
 import type { AlertEmail } from "@/server/ingestion/email/types";
 import { loadEmailFixtures, toGmailMessage } from "../support/email-fixtures";
@@ -100,6 +100,13 @@ describe("helpers", () => {
     expect(parseMonthName("Oct 01, 2026")).toBe("2026-10-01");
     expect(istTimestamp("2026-10-08", "11:23:10")?.toISOString()).toBe("2026-10-08T05:53:10.000Z");
     expect(istTimestamp("2026-10-08", "25:00")).toBeNull();
+  });
+
+  it("recognises OTP messages without catching alerts that warn about OTPs", () => {
+    expect(isOtpMessage("123456 is your OTP for a transaction of Rs.500", "")).toBe(true);
+    expect(isOtpMessage("Your OTP is 4821", "")).toBe(true);
+    expect(isOtpMessage("OTP: 4821", "")).toBe(true);
+    expect(isOtpMessage("Rs 500 spent. Never share your OTP, URN, CVV or passwords with anyone.", "Transaction alert")).toBe(false);
   });
 
   it("recognises transaction-like text", () => {
