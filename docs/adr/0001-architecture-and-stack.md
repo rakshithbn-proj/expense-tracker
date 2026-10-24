@@ -11,9 +11,9 @@ Status: Proposed (Milestone 0)
 - **Worker:** a separate Node process from the same codebase. It runs the pipeline stages, Gmail
   polling, Sheets sync, notifications and the daily summary.
 - **Database:** PostgreSQL 18, using Drizzle ORM with SQL migrations checked into Git.
-- **Durable jobs:** `pg-boss` (queue stored in Postgres). This avoids running Redis, so there's
-  one stateful service to back up. It gives retries, backoff, scheduling and dead-letter state.
-  Job state is mirrored to the `sync_jobs` table for the UI.
+- **Durable jobs:** a queue held in Postgres itself (`transaction_sources` rows claimed with
+  `FOR UPDATE SKIP LOCKED`, with retries, backoff and a failed state). This replaced the planned
+  `pg-boss` in Milestone 4 (ADR-0004): one fewer dependency, and the queue rows double as provenance.
 - **Money:** `numeric(14,2)` in Postgres, and integer paise in TypeScript. No floats.
 - **Time:** stored as `timestamptz` (UTC), displayed in `Asia/Kolkata`. Event time and capture time are kept separately.
 - **Auth:** single local user. Password hashed with argon2id. DB-backed sessions (only a

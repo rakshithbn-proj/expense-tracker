@@ -38,8 +38,11 @@ describe("migrations", () => {
       "categories",
       "category_rules",
       "financial_accounts",
+      "gmail_connections",
       "login_attempts",
       "sessions",
+      "source_health",
+      "transaction_sources",
       "transactions",
       "users",
     ]);

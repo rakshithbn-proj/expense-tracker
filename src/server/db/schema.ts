@@ -238,6 +238,95 @@ export const transactions = pgTable(
   ],
 );
 
+// ---------------------------------------------------------------------------
+// Capture sources and ingestion (Milestone 4)
+// ---------------------------------------------------------------------------
+
+export const sourceTypeEnum = pgEnum("source_type", ["gmail", "shortcut", "statement"]);
+export const parseStatusEnum = pgEnum("parse_status", ["pending", "processing", "parsed", "not_transaction", "unrecognized", "failed"]);
+export const matchStatusEnum = pgEnum("match_status", ["created", "matched_existing", "possible_duplicate"]);
+export const connectionStatusEnum = pgEnum("connection_status", ["connected", "needs_reauth", "disconnected"]);
+
+// One row per incoming source event (an email, a Shortcut submission, a statement row). It is
+// written before any processing, so nothing is lost if the worker stops, and it doubles as the
+// work queue (claimed with FOR UPDATE SKIP LOCKED) and as permanent provenance.
+// `payload` holds only what processing needs and is cleared afterwards (see purge_payload_after).
+export const transactionSources = pgTable(
+  "transaction_sources",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    transactionId: uuid("transaction_id").references(() => transactions.id, { onDelete: "set null" }),
+    sourceType: sourceTypeEnum("source_type").notNull(),
+    // Which account or device it came from, e.g. the Gmail address.
+    sourceIdentifier: text("source_identifier"),
+    sourceMessageId: text("source_message_id"),
+    statementImportId: uuid("statement_import_id"),
+    statementRowIdentifier: text("statement_row_identifier"),
+    rawPayloadHash: text("raw_payload_hash"),
+    payload: jsonb("payload"),
+    // When the source received it (e.g. Gmail's arrival time), for latency measurement.
+    receivedAt: timestamp("received_at", { withTimezone: true }),
+    processedAt: timestamp("processed_at", { withTimezone: true }),
+    parseStatus: parseStatusEnum("parse_status").notNull().default("pending"),
+    matchStatus: matchStatusEnum("match_status"),
+    parserId: text("parser_id"),
+    errorCode: text("error_code"),
+    lastError: text("last_error"),
+    attempts: integer("attempts").notNull().default(0),
+    nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }).notNull().defaultNow(),
+    lockedUntil: timestamp("locked_until", { withTimezone: true }),
+    purgePayloadAfter: timestamp("purge_payload_after", { withTimezone: true }),
+    ...timestamps,
+  },
+  (t) => [
+    uniqueIndex("transaction_sources_message_uq")
+      .on(t.userId, t.sourceType, t.sourceMessageId)
+      .where(sql`${t.sourceMessageId} is not null`),
+    index("transaction_sources_queue_idx").on(t.parseStatus, t.nextAttemptAt),
+    index("transaction_sources_transaction_idx").on(t.transactionId),
+  ],
+);
+
+export const gmailConnections = pgTable("gmail_connections", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id")
+    .notNull()
+    .unique()
+    .references(() => users.id, { onDelete: "cascade" }),
+  emailAddress: text("email_address").notNull(),
+  // AES-256-GCM encrypted with TOKEN_ENCRYPTION_KEY. Never logged or sent to the browser.
+  refreshTokenEncrypted: text("refresh_token_encrypted"),
+  scope: text("scope").notNull(),
+  status: connectionStatusEnum("status").notNull().default("connected"),
+  backfillCompletedAt: timestamp("backfill_completed_at", { withTimezone: true }),
+  lastSyncStartedAt: timestamp("last_sync_started_at", { withTimezone: true }),
+  lastSyncAt: timestamp("last_sync_at", { withTimezone: true }),
+  lastError: text("last_error"),
+  ...timestamps,
+});
+
+export const sourceHealth = pgTable(
+  "source_health",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    sourceType: sourceTypeEnum("source_type").notNull(),
+    sourceName: text("source_name").notNull(),
+    lastAttemptAt: timestamp("last_attempt_at", { withTimezone: true }),
+    lastSuccessAt: timestamp("last_success_at", { withTimezone: true }),
+    lastErrorCode: text("last_error_code"),
+    consecutiveFailures: integer("consecutive_failures").notNull().default(0),
+    status: text("status").notNull().default("not_configured"),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("source_health_user_source_uq").on(t.userId, t.sourceType, t.sourceName)],
+);
+
 // A budget row applies from its period_start month onward, until a later row for the same
 // category replaces it. category_id null means the overall monthly budget.
 export const budgets = pgTable(

@@ -1,27 +1,26 @@
-// Starts the local development database and keeps it running until Ctrl+C.
-import path from "node:path";
-import { startEmbeddedPg } from "./lib/embedded-pg";
+// Runs only the local database in this window until Ctrl+C, then shuts it down cleanly.
+// For the whole app (database, web app and worker) use `npm run app:start` / `npm run app:stop`.
+import { localDatabaseUrl, startPg, stopPg } from "./lib/local-pg";
 
 async function main() {
-  const pg = await startEmbeddedPg({
-    dataDir: path.resolve(".data/postgres"),
-    port: 5433,
-    persistent: true,
-    database: "expense_tracker",
-    quiet: true,
-  });
-  console.log(`PostgreSQL 18 running: ${pg.connectionString.replace(/:[^:@]+@/, ":***@")}`);
-  console.log("Press Ctrl+C to stop.");
+  const result = await startPg();
+  console.log(`PostgreSQL 18 ${result === "started" ? "running" : "was already running"}: ${localDatabaseUrl().replace(/:[^:@]+@/, ":***@")}`);
+  console.log("Press Ctrl+C to shut it down cleanly.");
 
+  let stopping = false;
   const shutdown = async () => {
-    await pg.stop();
+    if (stopping) return;
+    stopping = true;
+    await stopPg().catch((err) => console.error(err instanceof Error ? err.message : err));
+    console.log("Database shut down cleanly.");
     process.exit(0);
   };
   process.on("SIGINT", shutdown);
   process.on("SIGTERM", shutdown);
+  setInterval(() => {}, 1 << 30); // keep the process alive until Ctrl+C
 }
 
 main().catch((err) => {
-  console.error(err);
+  console.error(err instanceof Error ? err.message : err);
   process.exit(1);
 });

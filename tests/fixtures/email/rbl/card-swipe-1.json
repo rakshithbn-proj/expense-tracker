@@ -1,0 +1,25 @@
+{
+  "source": "Alert_ Your RBL Bank Credit Card has just been swiped.eml",
+  "from": "RBL Bank <RBLAlerts@rbl.bank.in>",
+  "subject": "Alert: Your RBL Bank Credit Card has just been swiped",
+  "date": "2026-10-11T15:07:25.000Z",
+  "html": " <!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\"> <html xmlns=\"http://www.w3.org/1999/xhtml\">  <head> <meta charset=\"utf-8\" content=\"text/html;\" http-equiv=\"Content-Type\"> <meta name=\"viewport\" content=\"width=device-width\"> <title>Card swipe</title>  <style type=\"text/css\"> @import url(https://example.invalid/); </style> </head>  <body>  <table class=\"container\" cellpadding=\"0\" cellspacing=\"0\" width=\"700\" style=\"max-width: 700px;width: 100%;\" align=\"center\"> <tr> <td style=\"border: solid 1px #CCCCCC\"> <table border=\"0\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\"> <tr> <td align=\"left\"> <img width=\"699\" style=\"max-width: 699px; width: 100%;\" src=\"https://example.invalid/\" alt=\"card swipe\"> </td> </tr> <tr> <td align=\"left\"> <table background=\"https://example.invalid/\" style=\"background-size:50% 100%;background-repeat: no-repeat;\" border=\"0\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\"> <tr> <td align=\"left\"> <table border=\"0\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\"> <tr style=\"height: 40px\"> <td></td> </tr> <tr style=\"font-family: Roboto; font-style: normal; font-weight: normal; font-size: 16px; line-height: 24px; text-align: center; letter-spacing: 0.02em; color: rgba(0, 0, 0, 0.6);\"> <td align=\"left\"> <table border=\"0\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\"> <tr> <td align=\"left\" style=\"width:10%\"></td> <td align=\"left\" style=\"text-align: center;\">INR1,000.00 spent at SAMPLE ENTERPRISES on RBL Bank credit card (6060) on 11-10-2026.AVL limit- INR250,000.00. Not you? Call 022-62327777     </td> <td align=\"left\" style=\"width:10%\"></td> </tr> </table> </td> </tr> <tr style=\"height:24px\"> <td></td> </tr> <tr> <td align=\"left\"> <table border=\"0\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\"> <tr> <td align=\"left\" style=\"width:3%;\"></td> <td align=\"left\" style=\"text-align: end;\"><a href=\"https://example.invalid/\" target=\"_blank\"><img width=\"650\" style=\"max-width: 650px; width: 100%;\" src=\"https://example.invalid/\" alt=\"download app now\"></a></td> <td align=\"left\" style=\"width:3%;\"></td> </tr> </table> </td> </tr> <tr style=\"height:24px\"> <td></td> </tr>    <tr bgcolor=\"#FBFBFB\"> <td align=\"left\"> <table border=\"0\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\"> <tr style=\"height:24px\"> <td></td> </tr> <tr> <td align=\"left\" style=\"width: 3%\"></td> <td align=\"left\" style=\"width: 47%;text-align: center;\"><a href=\"https://example.invalid/\" target=\"_blank\"><img width=\"216\" style=\"max-width:216px; width:100%\" src=\"https://example.invalid/\" alt=\"download app\"></a></td> <td align=\"left\" style=\"width: 47%;\"> <table border=\"0\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\"> <tr> <td align=\"left\" style=\"width: 4%; border-left: 2px solid rgba(0, 0, 0, 0.05);\"> </td> <td align=\"left\" style=\"text-align: end;\"><img width=\"54\" style=\"max-width: 54px; width: 100%;\" src=\"https://example.invalid/\"></td> <td></td> <td align=\"left\" style=\"font-family: Roboto; font-style: normal; font-weight: 500; font-size: 14px; line-height: 20px; text-align: center; letter-spacing: 0.02em; color: #CC5500;text-align:center\">Questions?<br> Reach out: 022 6232 7777</td> </tr> </table> </td> <td align=\"left\" style=\"width: 3%\"></td> </tr> <tr style=\"height:24px\"> <td></td> </tr> </table> </td> </tr>  <tr style=\"height: 12px\"> <td></td> </tr>  <tr> <td> <table border=\"0\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\"> <tr style=\"font-family: Roboto; font-style: normal; font-weight: normal; font-size: 10px; line-height: 26px; letter-spacing: 0.02em;\"> <td style=\"width:3%\"></td> <td style=\"text-align: center;\">In case the transaction is not initiated by you, please feel free to raise a dispute via <a href=\"https://example.invalid/\" target=\"_blank\"> RBL MyCard Mobile App </a> or Customer services. <Br > <a style=\"text-decoration-line: underline;color: #0E99E5;cursor: pointer;\">Click here</a> to unsubscribe </td> <td style=\"width:3%\"></td> </tr> </table> </td> </tr> <tr style=\"height: 12px\"> <td></td> </tr> </table> </td> </tr> </table> </td> </tr> </table> </td> </tr> </table>  <img id='SBBBB' src='https://example.invalid/' /></body>  </html> \n\n\n",
+  "text": null,
+  "expected": {
+    "currency": "INR",
+    "direction": "debit",
+    "transactionType": "purchase",
+    "status": "posted",
+    "accountType": "credit_card",
+    "uncertain": [],
+    "parserId": "rbl.card",
+    "institutionKey": "rbl",
+    "accountLast": "6060",
+    "amountPaise": 100000,
+    "merchant": "SAMPLE ENTERPRISES",
+    "transactionDate": "2026-10-11",
+    "sourceTimestamp": null,
+    "paymentMethod": "credit_card",
+    "referenceId": null
+  }
+}

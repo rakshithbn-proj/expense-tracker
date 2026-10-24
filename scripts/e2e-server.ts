@@ -33,7 +33,7 @@ async function main() {
 
   const next = spawn(process.execPath, [path.resolve("node_modules/next/dist/bin/next"), "start", "-p", PORT], {
     stdio: "inherit",
-    env: { ...process.env, NODE_ENV: "production", DATABASE_URL: pg.connectionString, LOG_LEVEL: "warn" },
+    env: { ...process.env, NODE_ENV: "production", DATABASE_URL: pg.connectionString, APP_ORIGIN: `http://localhost:${PORT}`, LOG_LEVEL: "warn" },
   });
 
   const shutdown = async () => {

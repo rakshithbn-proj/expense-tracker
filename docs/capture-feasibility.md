@@ -100,6 +100,29 @@ No Shortcut built for the user will ask for a UPI PIN, password, CVV or OTP.
 | S2 | One redacted statement per institution for the parser fixtures |
 | S3 | Over one month, count UPI payments in the statement versus alert emails received. This is our first real coverage estimate |
 
+## 6a. Evidence received (2026-10-22)
+
+Real alert emails supplied by the user (kept locally; redacted copies are test fixtures):
+
+| Institution | Alert seen | Sender | Notes |
+|---|---|---|---|
+| HDFC credit card | Card purchase | `alerts@hdfcbank.bank.in` | Amount, card, merchant, date and time |
+| HDFC RuPay credit card | **UPI payment** | `alerts@hdfcbank.bank.in` | UPI payments from this card are emailed, with the UPI reference and payee UPI ID |
+| HSBC credit card | Card purchase | `hsbc@hsbc.bank.in` | Date only, no time |
+| ICICI credit card | Card purchase | `credit_cards@icici.bank.in` | Amount, card, merchant, date and time |
+| RBL credit card | Card purchase | `RBLAlerts@rbl.bank.in` | Date only, no time |
+| ICICI bank account | — | — | User couldn't find alerts yet; to follow |
+| HDFC bank account | — | — | No sample yet |
+| SBI, AMEX | — | — | Out of scope at the user's request |
+
+What this means:
+- Credit-card spending on HDFC, HSBC, ICICI and RBL can be captured automatically from Gmail.
+- UPI payments made with the **HDFC RuPay credit card** are emailed, so they're capturable automatically.
+- UPI payments from **bank accounts** (HDFC, ICICI savings) remain unproven: no bank-account
+  alert samples yet. Those emails, if they arrive, are kept in the review queue until a parser
+  is added.
+- Senders use the new `.bank.in` domains, not the older addresses assumed above.
+
 ## 7. Strongest feasible design (what we will build)
 
 1. Gmail adapter (automatic, primary).

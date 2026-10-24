@@ -19,6 +19,7 @@ import { db } from "@/server/db/client";
 import { NotFoundError } from "@/server/errors";
 import { lookups } from "@/server/finance/reports-service";
 import { getTransaction, suggestLinks, transactionHistory } from "@/server/finance/transactions-service";
+import { sourceForTransaction } from "@/server/ingestion/gmail/service";
 import { correctAction, linkAction, unlinkAction, voidAction } from "../actions";
 
 export const metadata = { title: "Transaction · Expenses" };
@@ -56,10 +57,11 @@ export default async function TransactionPage({ params }: PageProps<"/transactio
     if (err instanceof NotFoundError) notFound();
     throw err;
   }
-  const [names, suggestions, history] = await Promise.all([
+  const [names, suggestions, history, sources] = await Promise.all([
     lookups(db(), user.id),
     suggestLinks(db(), user.id, id.data),
     transactionHistory(db(), user.id, id.data),
+    sourceForTransaction(db(), user.id, id.data),
   ]);
   const t = detail.transaction;
   const voided = !!t.voidedAt;
@@ -118,9 +120,25 @@ export default async function TransactionPage({ params }: PageProps<"/transactio
             <Fact label="Captured at">{formatDateTime(t.capturedAt)}</Fact>
             <Fact label="Payment time (from source)">{t.sourceTimestamp ? formatDateTime(t.sourceTimestamp) : <span className="text-muted">Not provided</span>}</Fact>
           </dl>
+          {sources.map((s) => {
+            const payload = (s.payload ?? {}) as { from?: string; subject?: string };
+            return (
+              <dl key={s.id} className="mt-2 border-t border-border pt-2">
+                <Fact label="Source">{s.sourceType === "gmail" ? `Gmail (${s.sourceIdentifier})` : s.sourceType}</Fact>
+                {payload.subject && <Fact label="Email">{payload.subject}</Fact>}
+                {payload.from && <Fact label="From">{payload.from}</Fact>}
+                {s.parserId && <Fact label="Read by">{s.parserId}</Fact>}
+                {s.receivedAt && <Fact label="Email arrived">{formatDateTime(s.receivedAt.toISOString())}</Fact>}
+                {s.processedAt && <Fact label="Processed">{formatDateTime(s.processedAt.toISOString())}</Fact>}
+                {s.matchStatus && s.matchStatus !== "created" && (
+                  <Fact label="Matching">{s.matchStatus === "matched_existing" ? "Matched an existing transaction" : "Possible duplicate"}</Fact>
+                )}
+              </dl>
+            );
+          })}
           <Definition>
-            Manual and sample entries never count toward automatic capture coverage. Source message details appear here once automatic capture is
-            connected (Milestone 4).
+            Only automatic captures (bank email, SMS) count toward automatic capture coverage. Manual entries, shared receipts, statement imports and
+            sample data never do.
           </Definition>
         </Card>
       </div>

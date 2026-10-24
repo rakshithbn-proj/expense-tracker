@@ -1,5 +1,13 @@
 # Production stack for the VPS. Values come from a `.env` file next to this file (see deploy/.env.production.example).
-# The background worker is added in Milestone 4.
+
+x-app-env: &app-env
+  DATABASE_URL: postgres://expense:${POSTGRES_PASSWORD}@db:5432/expense_tracker
+  APP_ORIGIN: https://${DOMAIN:?set DOMAIN in .env}
+  LOG_LEVEL: info
+  # Gmail capture (optional until you connect Gmail; see docs/setup/gmail.md)
+  GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+  GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+  TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY:-}
 
 services:
   db:
@@ -32,10 +40,19 @@ services:
   web:
     build: .
     restart: unless-stopped
-    environment:
-      DATABASE_URL: postgres://expense:${POSTGRES_PASSWORD}@db:5432/expense_tracker
-      APP_ORIGIN: https://${DOMAIN:?set DOMAIN in .env}
-      LOG_LEVEL: info
+    environment: *app-env
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  # Gmail sync and the ingestion queue. Safe to restart: queued work lives in Postgres.
+  worker:
+    build: .
+    command: ["npm", "run", "worker"]
+    restart: unless-stopped
+    environment: *app-env
+    healthcheck:
+      disable: true
     depends_on:
       migrate:
         condition: service_completed_successfully

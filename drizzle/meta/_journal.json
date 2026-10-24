@@ -15,6 +15,13 @@
       "when": 1792647485631,
       "tag": "0001_financial_model",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792659181190,
+      "tag": "0002_capture_sources",
+      "breakpoints": true
     }
   ]
 }

@@ -152,7 +152,7 @@ export async function createTransaction(
   db: Database,
   userId: string,
   rawInput: CreateTransactionInput,
-  origin: { captureMethod: CaptureMethod; isSample?: boolean },
+  origin: { captureMethod: CaptureMethod; isSample?: boolean; reviewReasons?: string[] },
 ): Promise<{ transaction: TransactionDto; created: boolean }> {
   if (!CAPTURE_METHODS.includes(origin.captureMethod)) throw new Error("Unknown capture method");
   const input = createTransactionSchema.parse(rawInput);
@@ -170,7 +170,7 @@ export async function createTransaction(
     if (input.categoryId) await assertCategoryOwned(tx, userId, input.categoryId);
 
     const merchantNormalized = normalizeMerchant(input.merchantName ?? input.originalDescription);
-    const reviewReasons: string[] = [];
+    const reviewReasons: string[] = [...(origin.reviewReasons ?? [])];
 
     // Category: explicit choice, then the user's rules, then a type default.
     let categoryId = input.categoryId ?? null;

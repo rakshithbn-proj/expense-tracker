@@ -12,7 +12,8 @@ coverage honestly.
 | 1 Foundation | Done. Auth, PWA shell, Postgres + migrations, tests, CI and Docker files |
 | 2 Financial data model | Done. Accounts, categories, rules, transactions, budgets, accounting rules, JSON API, sample seed |
 | 3 Dashboard and explorer | Done. Overview, transaction explorer and detail, manual entry, 14 reports, budgets, settings |
-| 4–9 | Not started. Automation and Alerts screens show "Not built yet"; coverage and reconciliation reports say they can't be measured yet |
+| 4 Gmail ingestion | Built and tested against real (redacted) alerts from HDFC, HSBC, ICICI and RBL cards. **Live Gmail not yet connected**: follow [docs/setup/gmail.md](docs/setup/gmail.md) |
+| 5–9 | Not started. Alerts screen shows "Not built yet"; coverage and reconciliation reports say they can't be measured yet |
 
 Not verified yet: the Docker image has never been built (there's no Docker on the dev machine,
 see ADR-0002). Its first build happens in GitHub Actions or on the VPS.
@@ -25,15 +26,21 @@ Requirements: Node.js 24+ and Git. Commands below are for PowerShell; use `npm.c
 ```powershell
 npm.cmd install
 Copy-Item .env.example .env.local     # first time only
-
-# Terminal 1: local PostgreSQL 18 (data in .data/postgres, port 5433)
-npm.cmd run db:start
-
-# Terminal 2
-npm.cmd run db:migrate
-npm.cmd run user:create -- you@example.com   # prompts for a password (min 12 chars)
-npm.cmd run dev                               # http://localhost:3000
+npm.cmd run app:start                 # first time also: npm.cmd run user:create -- you@example.com
 ```
+
+| Command | What it does |
+|---|---|
+| `npm.cmd run app:start` | Starts the database, applies migrations, then starts the web app (http://localhost:3000) and the worker, all in the background |
+| `npm.cmd run app:stop` | Stops the worker and web app, then **shuts the database down cleanly** |
+| `npm.cmd run app:status` | Shows what's running |
+
+Everything runs in the background, so closing a terminal window doesn't stop it. **Always
+finish with `app:stop`**, especially before shutting down the PC: that's what makes the
+database close cleanly. Logs are in `.data/logs/` (`web.log`, `worker.log`, `postgres.log`).
+
+To work on code with live output instead, run the pieces yourself: `npm.cmd run db:start` (Ctrl+C
+stops it cleanly), then `npm.cmd run dev` and `npm.cmd run worker` in their own windows.
 
 ### Tests
 
@@ -84,6 +91,19 @@ statements can be imported (Milestone 6).
 | `GET / POST /api/accounts`, `/api/categories`, `/api/rules` | Lists and creation |
 
 Amounts are integer paise (₹1 = 100) in the API, and `numeric(14,2)` in the database.
+
+### Alert email fixtures
+
+Parsers are tested against redacted copies of real alerts in `tests/fixtures/email/`. To add one,
+save the original `.eml` under the git-ignored `.data/email-samples/` and run:
+
+```powershell
+node scripts/make-email-fixture.mjs ".data/email-samples/<bank>/<file>.eml" tests/fixtures/email/<bank>/<name>.json "real=>fake" ...
+```
+
+It strips every link and comment, applies the replacements, refuses to write if any original
+value survives, and lists what's left. Read the output before committing. Then add an
+`expected` block to the JSON.
 
 ### Database changes
 
