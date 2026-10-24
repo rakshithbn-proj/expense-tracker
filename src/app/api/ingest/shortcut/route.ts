@@ -8,12 +8,20 @@ import { logger } from "@/server/logger";
 export const dynamic = "force-dynamic";
 
 const MAX_BODY_BYTES = 20_000;
-const reply = (body: unknown, status = 200, headers: Record<string, string> = {}) =>
-  Response.json(body, { status, headers: { "Cache-Control": "no-store", ...headers } });
+// `?format=text` returns just the message as plain text, so a Shortcut can show the reply
+// with a single "Show Notification" action instead of extracting a JSON field.
+function replier(request: Request) {
+  const asText = new URL(request.url).searchParams.get("format") === "text";
+  return (body: { status: string; message: string }, status = 200, headers: Record<string, string> = {}) =>
+    asText
+      ? new Response(body.message, { status, headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store", ...headers } })
+      : Response.json(body, { status, headers: { "Cache-Control": "no-store", ...headers } });
+}
 
 // Receives transactions from the user's iPhone Shortcuts. Authenticated only by a device key
 // (Authorization: Bearer etk_...), never by the browser session; no cookies are involved.
 export async function POST(request: Request) {
+  const reply = replier(request);
   const device = await authenticateDeviceKey(db(), request.headers.get("authorization"));
   if (!device) return reply({ status: "error", message: "Unauthorized" }, 401);
   if (await isRateLimited(db(), device.keyId)) {

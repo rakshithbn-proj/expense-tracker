@@ -21,6 +21,13 @@ test("an iPhone Shortcut key works end to end, and stops working when revoked", 
   expect(ok.status()).toBe(200);
   expect(await ok.json()).toMatchObject({ status: "captured", message: "Saved." });
 
+  const asText = await phone.post("/api/ingest/shortcut?format=text", {
+    headers: { Authorization: `Bearer ${key}` },
+    data: { kind: "quick_add", amount: "1", merchant: `Plain reply ${Date.now()}` },
+  });
+  expect(asText.headers()["content-type"]).toContain("text/plain");
+  expect(await asText.text()).toBe("Saved.");
+
   expect((await send("Bearer etk_not-a-real-key", { kind: "quick_add", amount: 1 })).status()).toBe(401);
   expect((await send(`Bearer ${key}`, { kind: "quick_add", amount: "abc" })).status()).toBe(400);
   const notJson = await phone.post("/api/ingest/shortcut", { headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" }, data: "{oops" });

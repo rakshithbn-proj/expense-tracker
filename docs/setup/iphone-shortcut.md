@@ -32,7 +32,9 @@ the **Key** and the **Endpoint**. The key is shown once.
   allow Node.js on private networks: allow it. This is plain HTTP on your own network, so only
   do it at home, and create a separate key for it that you revoke afterwards.
 
-In every Shortcut below, **ENDPOINT** and **KEY** mean the values from step 1.
+In every Shortcut below, **KEY** means the key from step 1 and **ENDPOINT** means the endpoint
+**with `?format=text` added to the end**, e.g. `http://192.168.1.20:3000/api/ingest/shortcut?format=text`.
+That makes the app reply with a plain sentence the Shortcut can show directly.
 
 ## Shortcut 1: Quick Add
 
@@ -52,8 +54,12 @@ Shortcuts app → **+** → name it **Log Expense**. Add these actions in order:
      - `merchant` (Text) = *Provided Input* from step 2
      - `paymentApp` (Text) = *Menu Result* (only if you kept step 3)
      - `id` (Text) = *Current Date*. This stops a double tap creating two entries.
-5. **Get Dictionary Value**: get *Value* for key `message` in *Contents of URL*.
-6. **Show Notification**: *Dictionary Value*.
+5. **Show Notification**: tap the text and choose the variable *Contents of URL*.
+
+Where things go in **Get Contents of URL** (tap the **›** on the action to see Method, Headers
+and Request Body):
+- The **ENDPOINT** goes in the blue **URL** placeholder.
+- The **KEY** goes in **Headers**: Key `Authorization`, Text `Bearer ` + the key (one space after Bearer).
 
 Run it once. You should see "Saved.", and the expense appears under **Transactions** as
 "Entered manually". Add it to your Home Screen or Action button for one-tap access.
@@ -90,7 +96,7 @@ Shortcuts app → **+** → name it **Send Receipt** → tap the **ⓘ** (detail
    `Bearer KEY`, Request Body **JSON**:
    - `kind` (Text) = `share`
    - `text` (Text) = *Text* (the extracted text)
-3. **Get Dictionary Value** `message` → **Show Notification**.
+3. **Show Notification** with *Contents of URL*.
 
 Then, in PhonePe or Google Pay, open a payment → **Share** (or take a screenshot and share it)
 → **Send Receipt**. **Things to check** (feasibility test I4): does Send Receipt appear in the
