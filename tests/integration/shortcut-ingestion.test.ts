@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { deviceKeys, transactionSources, transactions, users } from "@/server/db/schema";
+import { captureCapabilities } from "@/server/capture/capabilities";
 import { DomainError } from "@/server/errors";
 import { processQueue } from "@/server/ingestion/gmail/service";
 import { enqueueSource, resetForRetry } from "@/server/ingestion/queue";
@@ -144,6 +145,14 @@ describe("SMS and shared receipts", () => {
     expect(t).toMatchObject({ id: result.transactionId, amount: "5.00", merchantName: "RAVI KUMAR S", captureMethod: "auto_sms", paymentMethod: "upi", referenceId: "630099990001" });
     const [s] = await sources();
     expect(s).toMatchObject({ parseStatus: "parsed", parserId: "icici.sms_acct_upi_debit", payload: { kind: "sms", sender: "JD-ICICIT-S" } });
+
+    // The SMS source shows as tested; the ICICI Gmail source must not (same bank prefix, other source).
+    const caps = await captureCapabilities(testDb(), userId);
+    expect(caps.find((c) => c.id === "iphone.sms")).toMatchObject({ tested: "Real bank SMS captured from your iPhone" });
+    expect(caps.find((c) => c.id === "iphone.sms")!.lastSuccessAt).not.toBeNull();
+    const gmailIcici = caps.find((c) => c.id === "gmail.icici")!;
+    expect(gmailIcici.lastSuccessAt).toBeNull();
+    expect(gmailIcici.status).not.toBe("Tested successfully");
   });
 
   it("retry an unrecognised SMS from its masked excerpt instead of losing it", async () => {

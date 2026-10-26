@@ -11,6 +11,7 @@ import { addMonths, istDate, isValidMonth } from "@/lib/dates";
 import { CAPTURE_LABELS, formatInr, formatInrWhole, formatMonth, formatMonthShort, METHOD_LABELS } from "@/lib/format";
 import type { CaptureMethod, PaymentMethod } from "@/lib/finance-types";
 import { requireUser } from "@/server/auth/dal";
+import { captureCapabilities } from "@/server/capture/capabilities";
 import { db } from "@/server/db/client";
 import { daysInMonth } from "@/server/finance/analytics";
 import { lookups, overview } from "@/server/finance/reports-service";
@@ -27,7 +28,10 @@ export default async function OverviewPage({ searchParams }: PageProps<"/">) {
   const requested = z.string().optional().parse((await searchParams).month);
   const month = requested && isValidMonth(requested) && requested <= currentMonth ? requested : currentMonth;
 
-  const [data, names] = await Promise.all([overview(db(), user.id, month, today), lookups(db(), user.id)]);
+  const [data, names, capabilities] = await Promise.all([overview(db(), user.id, month, today), lookups(db(), user.id), captureCapabilities(db(), user.id)]);
+  // Same evidence as the Automation page: a source counts only after it captured something real.
+  const working = capabilities.filter((c) => c.mode === "Automatic" && c.lastSuccessAt !== null);
+  const failing = capabilities.filter((c) => c.status === "Temporarily failing");
   const { summary } = data;
   const catName = (id: string) => (id === "uncategorized" ? "Uncategorized" : (names.categoryName.get(id) ?? "Unknown category"));
   const monthQuery = `from=${month}-01&to=${month}-${String(daysInMonth(month)).padStart(2, "0")}`;
@@ -181,9 +185,16 @@ export default async function OverviewPage({ searchParams }: PageProps<"/">) {
       )}
 
       <Card title="Capture sources" action={<TextLink href="/automation">Details</TextLink>}>
-        <p className="text-sm">
-          No automatic capture source is connected yet. Gmail alerts arrive in Milestone 4 and iPhone capture in Milestone 5.
+        <p className="text-sm" data-testid="capture-summary">
+          {working.length === 0
+            ? "No automatic source has captured a real transaction yet. Connect Gmail or set up the iPhone SMS Shortcut in Automation."
+            : `Capturing automatically: ${working.map((c) => c.name).join(", ")}.`}
         </p>
+        {failing.length > 0 && (
+          <p className="mt-2 text-sm text-danger">
+            {failing.length} source{failing.length === 1 ? " is" : "s are"} failing right now. See Automation.
+          </p>
+        )}
         {hasAny && (
           <p className="mt-2 text-xs text-muted">
             This month&apos;s transactions by origin:{" "}

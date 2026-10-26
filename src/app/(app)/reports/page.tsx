@@ -400,8 +400,8 @@ export default async function ReportsPage({ searchParams }: PageProps<"/reports"
         <Card title={`Capture coverage · ${rangeLabel}`}>
           <p className="rounded-xl border border-[color:var(--status-warning)] p-3 text-sm">
             <strong>Not measurable yet.</strong> Coverage compares transactions captured automatically with the transactions on your bank and card
-            statements. No statements have been imported (statement import arrives in Milestone 6) and no automatic source is connected yet, so no
-            coverage figure is shown.
+            statements. Statement import isn&apos;t built yet (Milestone 6), so there is nothing to compare against and no coverage figure is
+            shown.
           </p>
           <h3 className="mt-4 mb-2 text-sm font-semibold">How this period&apos;s transactions were recorded</h3>
           {counts.size === 0 ? (

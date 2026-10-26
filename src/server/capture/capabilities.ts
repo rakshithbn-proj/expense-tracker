@@ -61,10 +61,18 @@ export async function captureCapabilities(db: Database, userId: string): Promise
     .from(sourceHealth)
     .where(and(eq(sourceHealth.userId, userId), eq(sourceHealth.sourceType, "gmail")));
   const lastByParser = await db
-    .select({ parserId: transactionSources.parserId, last: max(transactionSources.processedAt) })
+    .select({ sourceType: transactionSources.sourceType, parserId: transactionSources.parserId, last: max(transactionSources.processedAt) })
     .from(transactionSources)
     .where(and(eq(transactionSources.userId, userId), eq(transactionSources.parseStatus, "parsed"), isNotNull(transactionSources.parserId)))
-    .groupBy(transactionSources.parserId);
+    .groupBy(transactionSources.sourceType, transactionSources.parserId);
+  // Parser ids are per bank ("icici.card", "icici.sms_..."), so always split by where it came from:
+  // an ICICI SMS must never make the ICICI Gmail source look tested.
+  const fromGmail = lastByParser.filter((r) => r.sourceType === "gmail");
+  const fromSms = lastByParser.filter((r) => r.sourceType === "shortcut" && r.parserId?.includes(".sms_"));
+  const lastSms = fromSms
+    .map((r) => r.last)
+    .filter((d): d is Date => d !== null)
+    .sort((a, b) => b.getTime() - a.getTime())[0] ?? null;
 
   const activeKeys = await db
     .select({ id: deviceKeys.id })
@@ -79,11 +87,11 @@ export async function captureCapabilities(db: Database, userId: string): Promise
     if (!conn || conn.status === "disconnected") return "Awaiting authorization";
     if (conn.status === "needs_reauth") return "Awaiting authorization";
     if (health && health.status === "failing") return "Temporarily failing";
-    return lastByParser.some((r) => r.parserId?.startsWith(`${parserId}.`)) ? "Tested successfully" : "Available for testing";
+    return fromGmail.some((r) => r.parserId?.startsWith(`${parserId}.`)) ? "Tested successfully" : "Available for testing";
   };
 
   const gmail: Capability[] = PARSERS.map((p) => {
-    const last = lastByParser
+    const last = fromGmail
       .filter((r) => r.parserId?.startsWith(`${p.id}.`))
       .map((r) => r.last)
       .filter((d): d is Date => d !== null)
@@ -136,19 +144,22 @@ export async function captureCapabilities(db: Database, userId: string): Promise
       }),
       lastSuccessAt: lastQuickAdd,
     },
-    fixed({
-      id: "iphone.sms",
-      name: "Bank SMS via iPhone Shortcuts automation",
-      mechanism: "Shortcuts “Message” automation forwarding matching SMS to the app",
-      mode: "Automatic",
-      permissions: "A revocable device key in the Shortcut",
-      merchantAndAmount: "Depends on each bank's SMS",
-      reference: "Often (UPI reference)",
-      tested: "Endpoint tested; not yet tested from your iPhone",
-      limitations:
-        "Parsed: ICICI Bank account UPI debits. Other SMS are kept (masked) in “Needs a look” and become the samples for new parsers. Whether the automation runs without a tap must be checked on your iPhone.",
-      status: shortcutStatus(false),
-    }),
+    {
+      ...fixed({
+        id: "iphone.sms",
+        name: "Bank SMS via iPhone Shortcuts automation",
+        mechanism: "Shortcuts “Message” automation forwarding matching SMS to the app",
+        mode: "Automatic",
+        permissions: "A revocable device key in the Shortcut",
+        merchantAndAmount: "Depends on each bank's SMS",
+        reference: "Often (UPI reference)",
+        tested: lastSms ? "Real bank SMS captured from your iPhone" : "Endpoint tested; not yet tested from your iPhone",
+        limitations:
+          "Parsed: ICICI Bank account UPI debits. Other SMS are kept (masked) in “Needs a look” and become the samples for new parsers. Whether the automation runs every time without a tap is still being checked.",
+        status: shortcutStatus(false),
+      }),
+      lastSuccessAt: lastSms,
+    },
     fixed({
       id: "iphone.share",
       name: "UPI app receipt shared to a Shortcut",

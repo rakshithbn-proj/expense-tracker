@@ -38,7 +38,7 @@ integration works until it's tested with real evidence; never fake or simulate c
 | 3 Dashboard/reports | Done | Overview, explorer, 14 reports, budgets, settings |
 | 4 Gmail | Built and tested; **partly validated live** | 5 real HSBC alerts captured. HDFC, ICICI and RBL await live alerts |
 | 5 iPhone | **Server side done**; Quick Add works from the user's iPhone | SMS automation and share-receipt Shortcuts not set up yet; no SMS or receipt parsers (no samples) |
-| 6 Statements | Not started | Needs one statement per bank/card from the user (CSV/Excel or PDF?) |
+| 6 Statements | **Deferred by the user** (2026-10-26): they'll do it later | Needs one statement per bank/card from the user (CSV/Excel or PDF?). Until then the coverage and reconciliation reports say "Not available yet" |
 | 7 Sheets + notifications | **Done; Sheets tested live** (2026-10-26) | Sheets sync, CSV/Excel export, notification centre. Spreadsheet lives in an account the user chose in Settings (`docs/setup/sheets.md`). Design: ADR-0008 |
 | 8 Security/backups | Not started | Needs a backup bucket (B2 or R2) |
 | 9 Deploy + 30-day evaluation | Not started | Needs a VPS and DNS |
@@ -137,8 +137,13 @@ formats: unrecognised alerts, SMS and receipts go to a masked review queue (kept
 
 ## Next steps (suggested order)
 
-1. When the user confirms live HDFC, ICICI and RBL alerts look right, ask to push the 3 local
-   commits, then check CI.
+> **Note (2026-10-26):** the user will do **statement import (Milestone 6) later**, and also put
+> off security and backups (M8). Don't start either unless they ask. All functional work except
+> statement import is built; remaining gaps need real samples (savings-account emails, other
+> SMS, UPI receipts) or live confirmation (HDFC/ICICI/RBL card emails, SMS automation reliability).
+
+1. Everything up to Milestone 7 is pushed (CI green). The ICICI SMS commit and the
+   capture-status fix are committed locally but not pushed: push only when the user asks.
 2. **Milestone 7 is done.** Sheets connected live to the account the user chose (they type it in
    Settings; Google's account chooser is forced and a mismatched account is revoked). Push
    notifications are not built (in-app only); web push needs HTTPS, so revisit at deployment.
