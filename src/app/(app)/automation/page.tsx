@@ -59,7 +59,7 @@ export default async function AutomationPage({ searchParams }: PageProps<"/autom
     ingestionOverview(db(), user.id),
   ]);
   const connected = conn?.status === "connected";
-  const problemCount = (overview.counts.unrecognized ?? 0) + (overview.counts.failed ?? 0);
+  const problemCount = overview.problems.length;
 
   return (
     <div className="flex flex-col gap-4">
@@ -164,12 +164,15 @@ export default async function AutomationPage({ searchParams }: PageProps<"/autom
         ) : (
           <ul className="flex flex-col gap-3">
             {overview.problems.map((p) => {
-              const payload = (p.payload ?? {}) as { from?: string; subject?: string; excerpt?: string };
+              const payload = (p.payload ?? {}) as { from?: string; subject?: string; excerpt?: string; kind?: string; sender?: string };
+              const title = payload.subject ?? (payload.kind === "sms" ? `SMS${payload.sender ? ` from ${payload.sender}` : ""}` : payload.kind === "share" ? "Shared receipt" : "(subject not kept)");
               return (
                 <li key={p.id} className="rounded-xl border border-border p-3 text-sm">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <strong className="break-words">{payload.subject ?? "(subject not kept)"}</strong>
-                    <Badge tone={p.parseStatus === "failed" ? "danger" : "attention"}>{QUEUE_LABELS[p.parseStatus]}</Badge>
+                    <strong className="break-words">{title}</strong>
+                    <Badge tone={p.parseStatus === "failed" ? "danger" : "attention"}>
+                      {p.parseStatus === "pending" ? `Retrying after an error (next ${formatDateTime(p.nextAttemptAt.toISOString())})` : QUEUE_LABELS[p.parseStatus]}
+                    </Badge>
                   </div>
                   <div className="mt-1 text-xs text-muted">
                     {payload.from ?? p.sourceIdentifier} · {p.receivedAt ? formatDateTime(p.receivedAt.toISOString()) : "time unknown"} · {p.lastError}
@@ -180,7 +183,7 @@ export default async function AutomationPage({ searchParams }: PageProps<"/autom
                       <pre className="mt-1 max-h-48 overflow-auto rounded-lg bg-background p-2 text-xs whitespace-pre-wrap">{payload.excerpt}</pre>
                     </details>
                   )}
-                  <ActionForm action={retryAction} submitLabel="Retry" buttonClassName="mt-2 text-sm font-medium text-brand underline" className="flex flex-col">
+                  <ActionForm action={retryAction} submitLabel={p.parseStatus === "pending" ? "Retry now" : "Retry"} buttonClassName="mt-2 text-sm font-medium text-brand underline" className="flex flex-col">
                     <input type="hidden" name="id" value={p.id} />
                   </ActionForm>
                 </li>

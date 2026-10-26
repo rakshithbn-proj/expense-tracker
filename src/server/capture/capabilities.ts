@@ -1,5 +1,5 @@
 import "server-only";
-import { and, count, desc, eq, gte, inArray, isNotNull, like, max, sql } from "drizzle-orm";
+import { and, count, desc, eq, gte, inArray, isNotNull, like, max, or, sql } from "drizzle-orm";
 import type { Database } from "@/server/db/client";
 import { deviceKeys, gmailConnections, sourceHealth, transactionSources, transactions } from "@/server/db/schema";
 import { gmailConfig } from "@/server/env";
@@ -146,7 +146,7 @@ export async function captureCapabilities(db: Database, userId: string): Promise
       reference: "Often (UPI reference)",
       tested: "Endpoint tested; not yet tested from your iPhone",
       limitations:
-        "SMS are received and kept (masked) in “Needs a look”, but no bank SMS format is parsed yet: none has been seen. The first ones you forward become the samples for parsers. Whether the automation runs without a tap must be checked on your iPhone.",
+        "Parsed: ICICI Bank account UPI debits. Other SMS are kept (masked) in “Needs a look” and become the samples for new parsers. Whether the automation runs without a tap must be checked on your iPhone.",
       status: shortcutStatus(false),
     }),
     fixed({
@@ -213,6 +213,8 @@ export async function captureCapabilities(db: Database, userId: string): Promise
   ];
 }
 
+const retryingAfterError = and(eq(transactionSources.parseStatus, "pending"), isNotNull(transactionSources.errorCode));
+
 // Queue state, problem items and latency for the Automation page.
 export async function ingestionOverview(db: Database, userId: string, now = new Date()) {
   const counts = await db
@@ -221,10 +223,11 @@ export async function ingestionOverview(db: Database, userId: string, now = new 
     .where(eq(transactionSources.userId, userId))
     .groupBy(transactionSources.parseStatus);
 
+  // Includes items waiting to retry after an error, so they're visible and can be retried now.
   const problems = await db
     .select()
     .from(transactionSources)
-    .where(and(eq(transactionSources.userId, userId), inArray(transactionSources.parseStatus, ["unrecognized", "failed"])))
+    .where(and(eq(transactionSources.userId, userId), or(inArray(transactionSources.parseStatus, ["unrecognized", "failed"]), retryingAfterError)))
     .orderBy(desc(transactionSources.updatedAt))
     .limit(50);
 

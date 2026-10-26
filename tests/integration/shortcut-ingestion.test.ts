@@ -3,7 +3,7 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { deviceKeys, transactionSources, transactions, users } from "@/server/db/schema";
 import { DomainError } from "@/server/errors";
 import { processQueue } from "@/server/ingestion/gmail/service";
-import { enqueueSource } from "@/server/ingestion/queue";
+import { enqueueSource, resetForRetry } from "@/server/ingestion/queue";
 import {
   authenticateDeviceKey,
   createDeviceKey,
@@ -134,6 +134,43 @@ describe("SMS and shared receipts", () => {
 
   it("ignore text that isn't a payment", async () => {
     expect((await submitFromDevice(testDb(), await device(), { kind: "share", text: "Thanks for shopping with us!" }, now)).status).toBe("ignored");
+  });
+
+  it("record a known bank SMS as an automatic transaction, without keeping its text", async () => {
+    const icici = "ICICI Bank Acct XX123 debited for Rs 5.00 on 24-Oct-26; RAVI KUMAR S  credited. UPI:630099990001. Call 18002662 for dispute.";
+    const result = await submitFromDevice(testDb(), await device(), { kind: "sms", text: icici, sender: "JD-ICICIT-S" }, now);
+    expect(result.status).toBe("captured");
+    const [t] = await txs();
+    expect(t).toMatchObject({ id: result.transactionId, amount: "5.00", merchantName: "RAVI KUMAR S", captureMethod: "auto_sms", paymentMethod: "upi", referenceId: "630099990001" });
+    const [s] = await sources();
+    expect(s).toMatchObject({ parseStatus: "parsed", parserId: "icici.sms_acct_upi_debit", payload: { kind: "sms", sender: "JD-ICICIT-S" } });
+  });
+
+  it("retry an unrecognised SMS from its masked excerpt instead of losing it", async () => {
+    // Stored before the ICICI parser existed.
+    const excerpt = "ICICI Bank Acct XX123 debited for Rs 5.00 on 24-Oct-26; RAVI KUMAR S  credited. UPI:••••••••0001. Call ••••2662 for dispute.";
+    await enqueueSource(testDb(), { userId, sourceType: "shortcut", sourceIdentifier: deviceSourceIdentifier(keyId), sourceMessageId: "sms:old", payload: { kind: "sms", sender: "ICICIT-S", excerpt } }, now);
+    await testDb().update(transactionSources).set({ parseStatus: "unrecognized" });
+    expect(await resetForRetry(testDb(), userId, "all-failed", now)).toBe(1);
+    expect(await processQueue(testDb(), { config: null, now: () => now })).toEqual({ processed: 1, failed: 0 });
+    expect((await sources())[0]).toMatchObject({ parseStatus: "parsed", parserId: "icici.sms_acct_upi_debit" });
+    expect((await txs())[0]).toMatchObject({ amount: "5.00", referenceId: null });
+  });
+
+  it("an item waiting out its backoff after an error can be retried now", async () => {
+    await enqueueSource(testDb(), { userId, sourceType: "shortcut", sourceIdentifier: deviceSourceIdentifier(keyId), sourceMessageId: "sms:backoff", payload: { kind: "sms", text: sms } }, now);
+    await testDb().update(transactionSources).set({ errorCode: "processing_error", nextAttemptAt: new Date(now.getTime() + 3_600_000) });
+    expect(await resetForRetry(testDb(), userId, "all-failed", now)).toBe(1);
+    expect((await sources())[0].nextAttemptAt.getTime()).toBe(now.getTime());
+  });
+
+  it("a retried SMS that still isn't recognised goes back to review", async () => {
+    await submitFromDevice(testDb(), await device(), { kind: "sms", text: sms, sender: "JD-HDFCBK" }, now);
+    await resetForRetry(testDb(), userId, "all-failed", now);
+    await processQueue(testDb(), { config: null, now: () => now });
+    const [s] = await sources();
+    expect(s).toMatchObject({ parseStatus: "unrecognized", errorCode: "no_template" });
+    expect(s.purgePayloadAfter!.getTime()).toBe(now.getTime() + 7 * 86_400_000);
   });
 
   it("deduplicate an automation that fires twice for one SMS", async () => {

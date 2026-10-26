@@ -17,11 +17,11 @@ export function parseDayFirst(s: string): string | null {
   return m ? build(fullYear(m[3]), Number(m[2]), Number(m[1])) : null;
 }
 
-// "08 Oct, 2026", "8 Oct 2026", "Oct 01, 2026"
+// "08 Oct, 2026", "8 Oct 2026", "26-Oct-26", "Oct 01, 2026"
 export function parseMonthName(s: string): string | null {
-  const t = s.trim().replace(/,/g, "");
-  let m = /^(\d{1,2}) ([A-Za-z]{3})[a-z]* (\d{4})$/.exec(t);
-  if (m) return MONTHS[m[2].toLowerCase()] ? build(Number(m[3]), MONTHS[m[2].toLowerCase()], Number(m[1])) : null;
+  const t = s.trim().replace(/,/g, "").replace(/-/g, " ");
+  let m = /^(\d{1,2}) ([A-Za-z]{3})[a-z]* (\d{2}|\d{4})$/.exec(t);
+  if (m) return MONTHS[m[2].toLowerCase()] ? build(fullYear(m[3]), MONTHS[m[2].toLowerCase()], Number(m[1])) : null;
   m = /^([A-Za-z]{3})[a-z]* (\d{1,2}) (\d{4})$/.exec(t);
   if (m) return MONTHS[m[1].toLowerCase()] ? build(Number(m[3]), MONTHS[m[1].toLowerCase()], Number(m[2])) : null;
   return null;

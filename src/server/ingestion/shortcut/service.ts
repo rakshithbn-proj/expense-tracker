@@ -10,9 +10,11 @@ import { transactionSources } from "@/server/db/schema";
 import { DomainError } from "@/server/errors";
 import { createTransaction } from "@/server/finance/transactions-service";
 import { isOtpMessage, looksLikeTransaction } from "../email/parse-helpers";
+import { ingestEvent } from "../ingest";
 import { maskExcerpt } from "../mask";
 import { recordHealth } from "../health";
 import { completeSource, enqueueSource, type SourceRow } from "../queue";
+import { parseSms } from "../sms/parsers";
 import { deviceSourceIdentifier, type AuthenticatedDevice } from "./keys";
 
 const UNRECOGNIZED_KEEP_MS = 7 * 86_400_000;
@@ -113,7 +115,12 @@ export async function submitFromDevice(db: Database, device: AuthenticatedDevice
 // Turns one stored submission into a transaction or a review item. Also used by the worker
 // for submissions whose first attempt failed.
 export async function processShortcutRow(db: Database, row: SourceRow, given?: Submission, now = new Date()) {
-  const submission = given ?? submissionSchema.parse({ ...(row.payload as object), amount: 1 });
+  const submission = given ?? storedSubmission(row);
+  if (!submission) {
+    // Unrecognised text is kept masked for 7 days only; after that there's nothing to replay.
+    await completeSource(db, row.id, { parseStatus: "failed", errorCode: "not_replayable", lastError: "The text is no longer kept; send it again" }, now);
+    return;
+  }
   if (submission.kind === "quick_add") {
     if (!given) {
       // The amount isn't kept in the stored payload, so a failed Quick Add can't be replayed.
@@ -146,22 +153,59 @@ export async function processShortcutRow(db: Database, row: SourceRow, given?: S
     await completeSource(db, row.id, { parseStatus: "not_transaction", payload: null, lastError: "one-time password, not a completed payment" }, now);
     return;
   }
-  // No real SMS or receipt formats have been seen yet, so nothing is parsed automatically:
-  // transaction-like text waits for review (masked), and becomes a test fixture for a parser.
-  if (looksLikeTransaction(text, subject)) {
+  const parsed = submission.kind === "sms" ? parseSms(text, row.receivedAt ?? now) : null;
+  if (parsed?.kind === "transaction") {
+    const { parserId, ...event } = parsed.alert;
+    const ingested = await ingestEvent(db, row.userId, event, { captureMethod: "auto_sms", deduplicationKey: `shortcut:${row.sourceMessageId}` });
+    await completeSource(
+      db,
+      row.id,
+      {
+        parseStatus: "parsed",
+        parserId,
+        transactionId: ingested.transactionId,
+        matchStatus: ingested.matchStatus,
+        errorCode: null,
+        lastError: null,
+        // Only provenance; the SMS text is not kept.
+        payload: { kind: submission.kind, sender: subject || undefined },
+        purgePayloadAfter: null,
+      },
+      now,
+    );
+    return;
+  }
+  // Formats not seen yet aren't guessed: transaction-like text waits for review (masked), and
+  // becomes the sample for a new parser.
+  if (parsed?.kind === "unrecognized" || looksLikeTransaction(text, subject)) {
     await completeSource(
       db,
       row.id,
       {
         parseStatus: "unrecognized",
         errorCode: "no_template",
-        lastError: `${submission.kind === "sms" ? `SMS${submission.sender ? ` from ${submission.sender}` : ""}` : "Shared receipt"}: no format known yet`,
+        lastError:
+          parsed?.kind === "unrecognized"
+            ? parsed.reason
+            : `${submission.kind === "sms" ? `SMS${submission.sender ? ` from ${submission.sender}` : ""}` : "Shared receipt"}: no format known yet`,
         payload: { kind: submission.kind, sender: subject || undefined, excerpt: maskExcerpt(text) },
-        purgePayloadAfter: new Date(now.getTime() + UNRECOGNIZED_KEEP_MS),
+        // A retry doesn't extend how long the excerpt is kept.
+        purgePayloadAfter: row.purgePayloadAfter ?? new Date(now.getTime() + UNRECOGNIZED_KEEP_MS),
       },
       now,
     );
     return;
   }
   await completeSource(db, row.id, { parseStatus: "not_transaction", payload: null, lastError: "doesn't look like a payment" }, now);
+}
+
+// Rebuilds a submission from what was stored: the full text while it's still queued, or the masked
+// excerpt of an unrecognised one (a Retry after a parser was added). Amounts, dates and payees
+// survive masking; only long reference numbers don't.
+function storedSubmission(row: SourceRow): Submission | null {
+  const p = (row.payload ?? {}) as { kind?: string; sender?: string; text?: string; excerpt?: string };
+  if (p.kind === "quick_add") return submissionSchema.parse({ kind: "quick_add", amount: 1 });
+  const text = p.text ?? p.excerpt;
+  if (!text || (p.kind !== "sms" && p.kind !== "share")) return null;
+  return submissionSchema.parse(p.kind === "sms" ? { kind: "sms", text, sender: p.sender } : { kind: "share", text });
 }

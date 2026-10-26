@@ -98,6 +98,7 @@ describe("helpers", () => {
     expect(parseDayFirst("31-02-2026")).toBeNull();
     expect(parseMonthName("08 Oct, 2026")).toBe("2026-10-08");
     expect(parseMonthName("Oct 01, 2026")).toBe("2026-10-01");
+    expect(parseMonthName("26-Oct-26")).toBe("2026-10-26");
     expect(istTimestamp("2026-10-08", "11:23:10")?.toISOString()).toBe("2026-10-08T05:53:10.000Z");
     expect(istTimestamp("2026-10-08", "25:00")).toBeNull();
   });

@@ -93,12 +93,14 @@ export async function retryLater(db: Executor, row: SourceRow, errorCode: string
     .where(eq(transactionSources.id, row.id));
 }
 
-// User-requested retry of a failed or unrecognized item (e.g. after a parser update).
+// User-requested retry of a failed or unrecognized item (e.g. after a parser update), or one
+// waiting out its backoff after an error: it's tried again now.
 export async function resetForRetry(db: Executor, userId: string, ids: string[] | "all-failed", now = new Date()) {
-  const scope =
-    ids === "all-failed"
-      ? inArray(transactionSources.parseStatus, ["failed", "unrecognized"])
-      : and(inArray(transactionSources.id, ids), inArray(transactionSources.parseStatus, ["failed", "unrecognized"]));
+  const retryable = or(
+    inArray(transactionSources.parseStatus, ["failed", "unrecognized"]),
+    and(eq(transactionSources.parseStatus, "pending"), isNotNull(transactionSources.errorCode)),
+  );
+  const scope = ids === "all-failed" ? retryable : and(inArray(transactionSources.id, ids), retryable);
   const rows = await db
     .update(transactionSources)
     .set({ parseStatus: "pending", attempts: 0, nextAttemptAt: now, errorCode: null, lastError: null, updatedAt: now })
