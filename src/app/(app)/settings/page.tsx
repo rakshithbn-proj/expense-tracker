@@ -1,5 +1,5 @@
 import { ActionForm } from "@/components/action-form";
-import { Badge, buttonClass, Card, Definition, EmptyState, inputClass, PageHeader } from "@/components/ui";
+import { Badge, buttonClass, Card, Definition, EmptyState, inputClass, PageHeader, secondaryButtonClass } from "@/components/ui";
 import { ACCOUNT_TYPES } from "@/lib/finance-types";
 import { requireUser } from "@/server/auth/dal";
 import { db } from "@/server/db/client";
@@ -7,12 +7,16 @@ import { lookups } from "@/server/finance/reports-service";
 import { listRules } from "@/server/finance/rules-service";
 import { listDeviceKeys } from "@/server/ingestion/shortcut/keys";
 import { formatDateTime } from "@/lib/format";
+import { sheetsConfig } from "@/server/env";
+import { getSheetsConnection } from "@/server/sheets/service";
 import { DeviceKeyCreator } from "./device-keys";
 import {
   addAccountAction,
   addCategoryAction,
   createDeviceKeyAction,
+  disconnectSheetsAction,
   revokeDeviceKeyAction,
+  syncSheetsNowAction,
   toggleAccountAction,
   toggleRuleAction,
   updateCategoryAction,
@@ -32,9 +36,51 @@ const MATCH_LABELS = { merchant_exact: "Merchant is", merchant_contains: "Mercha
 const label = "flex flex-col gap-1 text-xs font-medium text-muted";
 const linkButton = "text-sm text-muted underline";
 
-export default async function SettingsPage() {
+const SHEETS_MESSAGES: Record<string, string> = {
+  connected: "Google Sheets connected and the spreadsheet is up to date.",
+  connected_sync_failed: "Google Sheets connected, but the first update failed. The error is shown below; the app keeps retrying.",
+  denied: "Access to Google Sheets was not granted.",
+  state_mismatch: "The sign-in couldn't be verified. Please try again.",
+  no_refresh_token: "Google didn't return lasting access. Remove the app at myaccount.google.com/permissions and connect again.",
+  not_configured: "Google isn't configured on the server yet (see docs/setup/gmail.md).",
+  error: "Connecting Google Sheets failed. Please try again.",
+  wrong_account: "You approved with a different Google account than the one entered, so nothing was connected and that access was revoked. Try again and pick the account entered below.",
+  invalid_account: "That doesn't look like an email address.",
+};
+
+// A plain GET form: the browser navigates to the connect route, which redirects to Google.
+function SheetsConnectForm({ account, label }: { account: string | null; label: string }) {
+  return (
+    <form method="get" action="/api/sheets/connect" className="flex flex-wrap items-end gap-3" data-testid="sheets-connect-form">
+      <label className="flex min-w-60 flex-1 flex-col gap-1 text-xs font-medium text-muted">
+        Google account that owns the spreadsheet
+        <input name="account" type="email" required defaultValue={account ?? ""} placeholder="e.g. you@gmail.com" autoComplete="email" className={inputClass} />
+      </label>
+      <button type="submit" className={buttonClass}>
+        {label}
+      </button>
+    </form>
+  );
+}
+
+function isSheetsConfigured() {
+  try {
+    return sheetsConfig() !== null;
+  } catch {
+    return false;
+  }
+}
+
+export default async function SettingsPage({ searchParams }: PageProps<"/settings">) {
   const user = await requireUser();
-  const [names, rules, keys] = await Promise.all([lookups(db(), user.id), listRules(db(), user.id), listDeviceKeys(db(), user.id)]);
+  const notice = (await searchParams).sheets;
+  const [names, rules, keys, sheets] = await Promise.all([
+    lookups(db(), user.id),
+    listRules(db(), user.id),
+    listDeviceKeys(db(), user.id),
+    getSheetsConnection(db(), user.id),
+  ]);
+  const sheetsConnected = sheets?.status === "connected";
 
   return (
     <div className="flex flex-col gap-4">
@@ -144,6 +190,93 @@ export default async function SettingsPage() {
           A key lets a Shortcut on your phone send transactions to this app, and nothing else: it can&apos;t read your data. Only a fingerprint of
           it is stored. It sits inside the Shortcut, so never share that Shortcut; if you do, or lose the phone, revoke the key here. Each key is
           limited to 120 submissions an hour.
+        </Definition>
+      </Card>
+
+      <Card title="Google Sheets" className="scroll-mt-4">
+        <div id="sheets" className="flex flex-col gap-3 text-sm">
+          {typeof notice === "string" && SHEETS_MESSAGES[notice] && (
+            <p role="status" className="rounded-xl border border-border p-3">
+              {SHEETS_MESSAGES[notice]}
+            </p>
+          )}
+          {!isSheetsConfigured() ? (
+            <EmptyState>Not configured. It uses the same Google setup as Gmail; follow <code>docs/setup/sheets.md</code>.</EmptyState>
+          ) : !sheets || sheets.status === "disconnected" ? (
+            <>
+              <p>
+                Keep a copy of every transaction in a Google spreadsheet, updated within a minute of each change. The app can only see the one
+                spreadsheet it creates, nothing else in your Drive.
+              </p>
+              <SheetsConnectForm account={sheets?.emailAddress ?? null} label="Connect Google Sheets" />
+              <p className="text-xs text-muted">
+                It doesn&apos;t have to be the account that receives your bank alerts. Google opens with this account selected, and the app refuses
+                the connection if a different account approves it.
+              </p>
+            </>
+          ) : (
+            <>
+              <div className="flex flex-wrap items-center gap-2">
+                {sheets.spreadsheetUrl ? (
+                  <a href={sheets.spreadsheetUrl} target="_blank" rel="noreferrer" className="font-medium text-brand underline">
+                    Open the spreadsheet
+                  </a>
+                ) : (
+                  <strong>Spreadsheet not created yet</strong>
+                )}
+                {sheets.emailAddress && <span className="text-muted">in {sheets.emailAddress}</span>}
+                <Badge tone={sheetsConnected ? (sheets.consecutiveFailures > 0 ? "attention" : "info") : "danger"}>
+                  {!sheetsConnected ? "Needs reconnecting" : sheets.consecutiveFailures > 0 ? "Retrying" : "Connected"}
+                </Badge>
+              </div>
+              <dl className="grid grid-cols-1 gap-1 sm:grid-cols-2" data-testid="sheets-status">
+                <div>
+                  <dt className="inline text-muted">Last update: </dt>
+                  <dd className="inline">
+                    {sheets.lastSyncAt ? `${formatDateTime(sheets.lastSyncAt.toISOString())} · ${sheets.syncedRowCount ?? 0} rows` : "Not yet"}
+                  </dd>
+                </div>
+                {sheets.lastError && (
+                  <div className="sm:col-span-2">
+                    <dt className="inline text-muted">Last error: </dt>
+                    <dd className="inline break-words">{sheets.lastError}</dd>
+                  </div>
+                )}
+                {sheetsConnected && sheets.nextAttemptAt && (
+                  <div>
+                    <dt className="inline text-muted">Next retry: </dt>
+                    <dd className="inline">{formatDateTime(sheets.nextAttemptAt.toISOString())}</dd>
+                  </div>
+                )}
+              </dl>
+              {!sheetsConnected && (
+                <>
+                  <p>Google stopped accepting the stored access. Reconnect to resume updates.</p>
+                  <SheetsConnectForm account={sheets.emailAddress} label="Reconnect Google Sheets" />
+                </>
+              )}
+              <div className="flex flex-wrap gap-3">
+                {sheetsConnected && (
+                  <ActionForm action={syncSheetsNowAction} submitLabel="Sync now" pendingLabel="Syncing…" buttonClassName={buttonClass} className="flex flex-col gap-2" />
+                )}
+                <ActionForm action={disconnectSheetsAction} submitLabel="Disconnect" pendingLabel="Disconnecting…" buttonClassName={secondaryButtonClass} className="flex flex-col gap-2" />
+              </div>
+              {sheetsConnected && (
+                <details>
+                  <summary className="cursor-pointer text-muted">Use a different Google account</summary>
+                  <p className="my-2 text-xs text-muted">
+                    A new spreadsheet is created in the other account. The current one stays where it is but stops being updated.
+                  </p>
+                  <SheetsConnectForm account={null} label="Switch account" />
+                </details>
+              )}
+            </>
+          )}
+        </div>
+        <Definition>
+          The “Transactions” tab holds one row per transaction (newest first, identified by its Transaction ID), excluding voided entries and sample
+          data. The app rewrites that tab whenever anything changes, so edits made there are overwritten: add your own formulas or charts on other
+          tabs. Text is written as plain values, never as formulas.
         </Definition>
       </Card>
 

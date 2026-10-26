@@ -372,8 +372,7 @@ export type ListFilter = z.input<typeof listFilterSchema>;
 
 const escapeLike = (s: string) => s.replace(/[\\%_]/g, (c) => `\\${c}`);
 
-export async function listTransactions(db: Executor, userId: string, rawFilter: ListFilter) {
-  const f = listFilterSchema.parse(rawFilter);
+function filterCondition(userId: string, f: z.output<typeof listFilterSchema>) {
   const where: SQL[] = [eq(transactions.userId, userId)];
   if (!f.includeVoided) where.push(isNull(transactions.voidedAt));
   if (f.q) {
@@ -399,23 +398,45 @@ export async function listTransactions(db: Executor, userId: string, rawFilter: 
   if (f.minAmountPaise !== undefined) where.push(gte(transactions.amount, paiseToDecimal(f.minAmountPaise)));
   if (f.maxAmountPaise !== undefined) where.push(lte(transactions.amount, paiseToDecimal(f.maxAmountPaise)));
   if (f.needsReview !== undefined) where.push(eq(transactions.needsReview, f.needsReview));
+  return and(...where);
+}
 
-  const condition = and(...where);
+// Stable tie-breakers so pages never overlap.
+function filterOrder(f: z.output<typeof listFilterSchema>) {
   const direction = f.order === "asc" ? asc : desc;
   const primary = f.sort === "amount" ? direction(transactions.amount) : direction(transactions.transactionDate);
+  return [primary, direction(transactions.createdAt), asc(transactions.id)];
+}
 
+export async function listTransactions(db: Executor, userId: string, rawFilter: ListFilter) {
+  const f = listFilterSchema.parse(rawFilter);
+  const condition = filterCondition(userId, f);
   const [rows, [{ total }]] = await Promise.all([
     db
       .select()
       .from(transactions)
       .where(condition)
-      // Stable tie-breakers so pages never overlap.
-      .orderBy(primary, direction(transactions.createdAt), asc(transactions.id))
+      .orderBy(...filterOrder(f))
       .limit(f.pageSize)
       .offset((f.page - 1) * f.pageSize),
     db.select({ total: count() }).from(transactions).where(condition),
   ]);
   return { items: rows.map(toDto), total, page: f.page, pageSize: f.pageSize };
+}
+
+export const EXPORT_ROW_LIMIT = 100_000;
+
+// Every transaction matching the filter (paging ignored), for exports and the Sheets sync.
+export async function allMatchingTransactions(db: Executor, userId: string, rawFilter: Omit<ListFilter, "page" | "pageSize">) {
+  const f = listFilterSchema.parse(rawFilter);
+  const rows = await db
+    .select()
+    .from(transactions)
+    .where(filterCondition(userId, f))
+    .orderBy(...filterOrder(f))
+    .limit(EXPORT_ROW_LIMIT + 1);
+  if (rows.length > EXPORT_ROW_LIMIT) throw new DomainError("too_many_rows", `More than ${EXPORT_ROW_LIMIT} transactions match. Narrow the date range.`);
+  return rows.map(toDto);
 }
 
 // ---------------------------------------------------------------------------

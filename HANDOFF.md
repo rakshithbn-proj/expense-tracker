@@ -19,8 +19,9 @@ integration works until it's tested with real evidence; never fake or simulate c
 ## Git state (important)
 
 - Last **pushed** commit: `4ce2b26` (Milestone 3). CI passed on it.
-- **3 local commits NOT pushed**: `aca0308` (M4 Gmail), `f485b4d` (M5 server side),
-  `b882107` (Shortcut plain-text replies, test-harness fix).
+- **Local commits NOT pushed**: `aca0308` (M4 Gmail), `f485b4d` (M5 server side),
+  `b882107` (Shortcut plain-text replies, test-harness fix), `b3af46a` (this file), plus the
+  Milestone 7 work (uncommitted at the end of the M7 session unless the user asked to commit).
 - Why: M4 adds redacted fixtures of the user's real bank emails (`tests/fixtures/email/`).
   The user must approve them before they go into the public repo; they said they'd review
   once live alerts from their other cards arrive. **Ask before pushing.** After pushing, check
@@ -38,11 +39,11 @@ integration works until it's tested with real evidence; never fake or simulate c
 | 4 Gmail | Built and tested; **partly validated live** | 5 real HSBC alerts captured. HDFC, ICICI and RBL await live alerts |
 | 5 iPhone | **Server side done**; Quick Add works from the user's iPhone | SMS automation and share-receipt Shortcuts not set up yet; no SMS or receipt parsers (no samples) |
 | 6 Statements | Not started | Needs one statement per bank/card from the user (CSV/Excel or PDF?) |
-| 7 Sheets + notifications | Not started | Needs nothing new from the user (reuses their Google project). **Suggested next** |
+| 7 Sheets + notifications | **Done; Sheets tested live** (2026-10-26) | Sheets sync, CSV/Excel export, notification centre. Spreadsheet lives in an account the user chose in Settings (`docs/setup/sheets.md`). Design: ADR-0008 |
 | 8 Security/backups | Not started | Needs a backup bucket (B2 or R2) |
 | 9 Deploy + 30-day evaluation | Not started | Needs a VPS and DNS |
 
-Tests at handoff: 223 unit/integration (Vitest, real embedded Postgres) and 44 E2E
+Tests at handoff: 269 unit/integration (Vitest, real embedded Postgres) and 52 E2E
 (Playwright, desktop and mobile Chromium). Lint and typecheck clean.
 
 ## Live integrations and the user's setup (no secrets here)
@@ -111,10 +112,15 @@ npm.cmd run test:e2e     # build + Playwright (own throwaway DB on 5435, port 31
   (source-agnostic: account resolution, dedup), `queue.ts` (durable `FOR UPDATE SKIP LOCKED`
   queue), `health.ts`, `mask.ts`.
 - `src/server/capture/capabilities.ts`: the spec §4.2 capability matrix and statuses.
+- `src/server/google/oauth.ts`: shared Google OAuth (auth URL, code exchange, revoke, access-token cache).
+- `src/server/sheets/`: Sheets client and sync (full idempotent rewrite of the Transactions tab,
+  fingerprint skip, backoff). `src/server/export/`: table definition, CSV (formula guard), XLSX + ZIP writer.
+- `src/server/notifications/`: `rules.ts` (what should be shown) and `service.ts` (reconcile by
+  dedup key, read/dismiss, 90-day retention). The worker runs capture → Sheets → notifications.
 - `src/app/(app)/`: pages (overview, transactions, reports, budgets, automation, settings,
   notifications placeholder).
 - `src/app/api/`: JSON API (session plus same-origin check), `gmail/connect|callback`,
-  `ingest/shortcut` (device key).
+  `sheets/connect|callback`, `export` (CSV/XLSX), `ingest/shortcut` (device key).
 - `scripts/`: `app.ts`, `worker.ts`, `db-dev.ts`, `migrate.ts`, `user.ts`, `seed-sample.ts`,
   `e2e-server.ts`, `make-email-fixture.mjs`.
 - `docs/`: feasibility, plan, ADRs 0001–0007, `setup/gmail.md`, `setup/iphone-shortcut.md`.
@@ -133,11 +139,9 @@ formats: unrecognised alerts, SMS and receipts go to a masked review queue (kept
 
 1. When the user confirms live HDFC, ICICI and RBL alerts look right, ask to push the 3 local
    commits, then check CI.
-2. **Milestone 7:** Google Sheets sync (idempotent row per transaction ID, retries, sync
-   status, CSV and Excel export with formula-injection protection) and the in-app
-   notification centre (capture failures, auth failures, uncategorised, unmatched items,
-   budget warnings, daily summary, Sheets failures). Sheets needs an extra OAuth scope
-   (prefer `drive.file`).
+2. **Milestone 7 is done.** Sheets connected live to the account the user chose (they type it in
+   Settings; Google's account chooser is forced and a mismatched account is revoked). Push
+   notifications are not built (in-app only); web push needs HTTPS, so revisit at deployment.
 3. Parsers for SMS and receipts once the user sends samples through the Shortcut (they land in
    Automation → Needs a look with masked excerpts). Also bank-account alert parsers when
    samples arrive.
@@ -155,7 +159,9 @@ formats: unrecognised alerts, SMS and receipts go to a masked review queue (kept
 - The Docker image has been built in CI but never run; first real run is on the VPS.
 - `npm audit`: dev-only advisories (eslint `braces`, drizzle-kit `esbuild`); runtime is clean.
 - Insights and budget suggestions need 3 months of history; until then they correctly say so.
-- The Alerts/notifications page is still a placeholder (M7).
+- Notifications are in-app only (Alerts page + badge); no push or email.
+- The Excel writer is hand-built (no dependency); it was checked with openpyxl but not yet
+  opened in real Excel or Numbers by the user.
 
 ## Working with this user
 

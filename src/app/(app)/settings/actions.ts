@@ -10,8 +10,9 @@ import { DomainError, NotFoundError } from "@/server/errors";
 import { createAccount, updateAccount } from "@/server/finance/accounts-service";
 import { createCategory, updateCategory } from "@/server/finance/categories-service";
 import { setRuleActive } from "@/server/finance/rules-service";
-import { env } from "@/server/env";
+import { env, sheetsConfig } from "@/server/env";
 import { createDeviceKey, revokeDeviceKey } from "@/server/ingestion/shortcut/keys";
+import { disconnectSheets, syncSheets } from "@/server/sheets/service";
 import type { KeyState } from "./device-keys";
 
 const done = (message: string) => {
@@ -94,5 +95,30 @@ export async function revokeDeviceKeyAction(_prev: ActionState, fd: FormData): P
       throw err;
     }
     return done("Key revoked. Shortcuts using it stop working immediately.");
+  });
+}
+
+function sheets() {
+  const c = sheetsConfig();
+  if (!c) throw new DomainError("not_configured", "Google isn't configured on the server yet. See docs/setup/gmail.md.");
+  return c;
+}
+
+export async function syncSheetsNowAction(): Promise<ActionState> {
+  const user = await requireUser();
+  return runAction(async () => {
+    const result = await syncSheets(db(), user.id, { config: sheets() }, { force: true });
+    revalidatePath("/settings");
+    if (result.status === "synced") return `Spreadsheet updated: ${result.rows} transaction${result.rows === 1 ? "" : "s"}.`;
+    if (result.status === "failed") throw new DomainError("sync_failed", `Sync failed: ${result.error}`);
+    throw new DomainError("not_connected", "Google Sheets isn't connected.");
+  });
+}
+
+export async function disconnectSheetsAction(): Promise<ActionState> {
+  const user = await requireUser();
+  return runAction(async () => {
+    await disconnectSheets(db(), user.id, { config: sheets() });
+    return done("Disconnected, and access revoked at Google. The spreadsheet stays in your Google Drive but is no longer updated.");
   });
 }

@@ -1,16 +1,19 @@
 import Link from "next/link";
 import { requireUser } from "@/server/auth/dal";
+import { db } from "@/server/db/client";
+import { unreadCount } from "@/server/notifications/service";
 import { logout } from "./actions";
 import { SideNav, TabBar } from "./nav";
 
 export default async function AppLayout({ children }: LayoutProps<"/">) {
   const user = await requireUser();
+  const unreadAlerts = await unreadCount(db(), user.id);
 
   return (
     <div className="min-h-dvh md:flex">
       <aside className="hidden w-60 shrink-0 flex-col gap-6 border-r border-border bg-surface p-4 md:flex">
         <div className="px-3 pt-2 text-lg font-semibold">Expenses</div>
-        <SideNav />
+        <SideNav unreadAlerts={unreadAlerts} />
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
@@ -33,7 +36,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
         <main className="mx-auto w-full max-w-5xl flex-1 px-4 pb-28 pt-4 md:px-8 md:pb-10">{children}</main>
       </div>
 
-      <TabBar />
+      <TabBar unreadAlerts={unreadAlerts} />
     </div>
   );
 }

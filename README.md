@@ -12,9 +12,11 @@ coverage honestly.
 | 1 Foundation | Done. Auth, PWA shell, Postgres + migrations, tests, CI and Docker files |
 | 2 Financial data model | Done. Accounts, categories, rules, transactions, budgets, accounting rules, JSON API, sample seed |
 | 3 Dashboard and explorer | Done. Overview, transaction explorer and detail, manual entry, 14 reports, budgets, settings |
-| 4 Gmail ingestion | Built and tested against real (redacted) alerts from HDFC, HSBC, ICICI and RBL cards. **Live Gmail not yet connected**: follow [docs/setup/gmail.md](docs/setup/gmail.md) |
-| 5 iPhone Shortcuts | Server side done: device keys, ingestion endpoint, Quick Add. SMS and receipt text are received and kept for review until real formats are seen. **Not yet tried on your iPhone**: follow [docs/setup/iphone-shortcut.md](docs/setup/iphone-shortcut.md) |
-| 6–9 | Not started. Alerts screen shows "Not built yet"; coverage and reconciliation reports say they can't be measured yet |
+| 4 Gmail ingestion | Built and tested against real (redacted) alerts. Live Gmail connected; HSBC alerts captured live, HDFC, ICICI and RBL await live alerts. See [docs/setup/gmail.md](docs/setup/gmail.md) |
+| 5 iPhone Shortcuts | Server side done: device keys, ingestion endpoint, Quick Add (working from the iPhone). SMS and receipt text are received and kept for review until real formats are seen. See [docs/setup/iphone-shortcut.md](docs/setup/iphone-shortcut.md) |
+| 6 Statements | Not started. Coverage and reconciliation reports say they can't be measured yet |
+| 7 Sheets, exports, alerts | Built and tested: Google Sheets sync ([docs/setup/sheets.md](docs/setup/sheets.md)), CSV and Excel export, in-app notification centre. Google Sheets tested live (spreadsheet in your chosen account) |
+| 8–9 | Not started |
 
 Not verified yet: the Docker image has never been built (there's no Docker on the dev machine,
 see ADR-0002). Its first build happens in GitHub Actions or on the VPS.

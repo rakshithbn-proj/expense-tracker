@@ -33,6 +33,20 @@ export function gmailConfig(): GmailConfig | null {
   };
 }
 
+export type SheetsConfig = { clientId: string; clientSecret: string; redirectUri: string; encryptionKey: Buffer };
+
+// Google Sheets reuses the same Google OAuth client, with its own redirect URI and grant.
+export function sheetsConfig(): SheetsConfig | null {
+  const gmail = gmailConfig();
+  if (!gmail) return null;
+  return {
+    clientId: gmail.clientId,
+    clientSecret: gmail.clientSecret,
+    redirectUri: new URL("/api/sheets/callback", env().APP_ORIGIN).toString(),
+    encryptionKey: gmail.encryptionKey,
+  };
+}
+
 export type Env = z.infer<typeof envSchema>;
 
 let cached: Env | undefined;

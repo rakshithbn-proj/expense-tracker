@@ -57,10 +57,18 @@ export default async function TransactionsPage({ searchParams }: PageProps<"/tra
   for (const t of result?.items ?? []) groups.set(t.transactionDate, [...(groups.get(t.transactionDate) ?? []), t]);
   const sortedByDate = (params.sort ?? "date-desc").startsWith("date");
   const pages = result ? Math.max(1, Math.ceil(result.total / result.pageSize)) : 1;
+  const exportQuery = new URLSearchParams(Object.entries(params).filter(([k, v]) => k !== "page" && v) as [string, string][]);
+  const exportHref = (format: "csv" | "xlsx") => `/api/export?${new URLSearchParams([["format", format], ...exportQuery])}`;
 
   return (
     <div className="flex flex-col gap-4">
       <PageHeader title="Transactions">
+        <a href={exportHref("csv")} className={secondaryButtonClass} download>
+          Export CSV
+        </a>
+        <a href={exportHref("xlsx")} className={secondaryButtonClass} download>
+          Export Excel
+        </a>
         <Link href="/transactions/new" className={buttonClass}>
           Add manually
         </Link>

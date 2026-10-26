@@ -1,0 +1,1 @@
+ALTER TABLE "sheets_connections" ADD COLUMN "email_address" text;

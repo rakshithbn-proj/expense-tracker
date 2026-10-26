@@ -21,6 +21,18 @@ function isActive(pathname: string, href: string) {
   return href === "/" ? pathname === "/" : pathname.startsWith(href);
 }
 
+// Unread alert count on the Alerts item. The number is in the accessible name too.
+function UnreadBadge({ count }: { count: number }) {
+  if (count === 0) return null;
+  return (
+    <span className="ml-auto min-w-5 rounded-full bg-danger px-1.5 text-center text-[11px] font-semibold leading-5 text-white" data-testid="unread-alerts">
+      {count > 99 ? "99+" : count}
+    </span>
+  );
+}
+
+const unreadLabel = (href: string, count: number) => (href === "/notifications" && count > 0 ? `, ${count} unread` : "");
+
 function Icon({ d }: { d: string }) {
   return (
     <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -29,7 +41,7 @@ function Icon({ d }: { d: string }) {
   );
 }
 
-export function SideNav() {
+export function SideNav({ unreadAlerts = 0 }: { unreadAlerts?: number }) {
   const pathname = usePathname();
   return (
     <nav aria-label="Main" className="flex flex-col gap-1">
@@ -42,13 +54,15 @@ export function SideNav() {
         >
           <Icon d={item.icon} />
           {item.label}
+          <span className="sr-only">{unreadLabel(item.href, unreadAlerts)}</span>
+          {item.href === "/notifications" && <UnreadBadge count={unreadAlerts} />}
         </Link>
       ))}
     </nav>
   );
 }
 
-export function TabBar() {
+export function TabBar({ unreadAlerts = 0 }: { unreadAlerts?: number }) {
   const pathname = usePathname();
   return (
     <nav
@@ -60,10 +74,16 @@ export function TabBar() {
           key={item.href}
           href={item.href}
           aria-current={isActive(pathname, item.href) ? "page" : undefined}
-          className="flex flex-col items-center gap-0.5 py-2 text-[11px] font-medium text-muted aria-[current=page]:text-brand"
+          className="relative flex flex-col items-center gap-0.5 py-2 text-[11px] font-medium text-muted aria-[current=page]:text-brand"
         >
           <Icon d={item.icon} />
           {item.label}
+          <span className="sr-only">{unreadLabel(item.href, unreadAlerts)}</span>
+          {item.href === "/notifications" && unreadAlerts > 0 && (
+            <span aria-hidden className="absolute top-1 left-1/2 ml-2 min-w-4 rounded-full bg-danger px-1 text-center text-[10px] font-semibold leading-4 text-white">
+              {unreadAlerts > 99 ? "99+" : unreadAlerts}
+            </span>
+          )}
         </Link>
       ))}
     </nav>
