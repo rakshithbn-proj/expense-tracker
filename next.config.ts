@@ -11,6 +11,12 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  experimental: {
+    // The dev server is always force-killed (`app:stop` uses taskkill /F, and so does closing the
+    // PC), which can leave Turbopack's on-disk dev cache half-written. A damaged cache made every
+    // page load get "HMR hash mismatch" and reload forever. Cold compiles are fine for one user.
+    turbopackFileSystemCacheForDev: false,
+  },
   turbopack: {
     rules: {
       "*.css": {

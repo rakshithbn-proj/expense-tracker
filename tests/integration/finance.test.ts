@@ -14,6 +14,7 @@ import {
   linkRefund,
   linkReversal,
   linkTransfer,
+  listReasons,
   listTransactions,
   summarizeMonth,
   unlinkTransaction,
@@ -279,6 +280,14 @@ describe("filtering", () => {
     expect(await ids({ paymentApps: ["PhonePe"] })).toEqual(["Swiggy"]);
     expect(await ids({ minAmountPaise: 1000_00, maxAmountPaise: 2000_00 })).toEqual(["IRCTC"]);
     expect(await ids({ statuses: ["failed"] })).toEqual(["IRCTC"]);
+  });
+
+  it("filters by the reason given when explaining", async () => {
+    await testDb().update(transactions).set({ reason: "Home Expense" }).where(eq(transactions.merchantName, "BigBasket"));
+    await testDb().update(transactions).set({ reason: "Rakshith Personal" }).where(eq(transactions.merchantName, "Swiggy"));
+    expect(await listReasons(testDb(), userId)).toEqual(["Home Expense", "Rakshith Personal"]);
+    expect(await ids({ reasons: ["Home Expense"] })).toEqual(["BigBasket"]);
+    expect((await ids({ noReason: true })).sort()).toEqual(["100%_off store", "IRCTC"]);
   });
 
   it("accepts query-string style input and paginates with a stable order", async () => {

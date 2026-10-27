@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { z } from "zod";
 import { BarList } from "@/components/charts/bar-list";
 import { BudgetMeter } from "@/components/charts/budget-meter";
@@ -12,6 +13,7 @@ import { CAPTURE_LABELS, formatInr, formatInrWhole, formatMonth, formatMonthShor
 import type { CaptureMethod, PaymentMethod } from "@/lib/finance-types";
 import { requireUser } from "@/server/auth/dal";
 import { captureCapabilities } from "@/server/capture/capabilities";
+import { listToExplain } from "@/server/explain/service";
 import { db } from "@/server/db/client";
 import { daysInMonth } from "@/server/finance/analytics";
 import { lookups, overview } from "@/server/finance/reports-service";
@@ -28,7 +30,12 @@ export default async function OverviewPage({ searchParams }: PageProps<"/">) {
   const requested = z.string().optional().parse((await searchParams).month);
   const month = requested && isValidMonth(requested) && requested <= currentMonth ? requested : currentMonth;
 
-  const [data, names, capabilities] = await Promise.all([overview(db(), user.id, month, today), lookups(db(), user.id), captureCapabilities(db(), user.id)]);
+  const [data, names, capabilities, toExplain] = await Promise.all([
+    overview(db(), user.id, month, today),
+    lookups(db(), user.id),
+    captureCapabilities(db(), user.id),
+    listToExplain(db(), user.id),
+  ]);
   // Same evidence as the Automation page: a source counts only after it captured something real.
   const working = capabilities.filter((c) => c.mode === "Automatic" && c.lastSuccessAt !== null);
   const failing = capabilities.filter((c) => c.status === "Temporarily failing");
@@ -52,6 +59,18 @@ export default async function OverviewPage({ searchParams }: PageProps<"/">) {
         <MonthNav month={month} currentMonth={currentMonth} basePath="/" />
       </PageHeader>
       <SampleBanner count={data.sampleCount} />
+      {toExplain.length > 0 && (
+        <Link
+          href="/explain"
+          className="flex items-center justify-between gap-3 rounded-xl border border-brand bg-surface px-4 py-3 text-sm font-medium"
+          data-testid="to-explain-banner"
+        >
+          <span>
+            {toExplain.length} payment{toExplain.length === 1 ? "" : "s"} to explain
+          </span>
+          <span aria-hidden>›</span>
+        </Link>
+      )}
 
       <section className="rounded-2xl border border-border bg-surface p-5" aria-labelledby="net-spend-label">
         <div id="net-spend-label" className="text-sm text-muted">

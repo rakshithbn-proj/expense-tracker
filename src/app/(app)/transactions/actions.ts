@@ -23,6 +23,7 @@ export async function correctAction(_prev: ActionState, fd: FormData): Promise<A
   const user = await requireUser();
   return runAction(async () => {
     const id = formString(fd, "id")!;
+    const reason = formNullable(fd, "reason");
     const { ruleId } = await correctTransaction(db(), user.id, id, {
       categoryId: formNullable(fd, "categoryId"),
       merchantName: formNullable(fd, "merchantName"),
@@ -30,6 +31,9 @@ export async function correctAction(_prev: ActionState, fd: FormData): Promise<A
       paymentMethod: (formString(fd, "paymentMethod") || undefined) as never,
       financialAccountId: formNullable(fd, "financialAccountId"),
       notes: formNullable(fd, "notes"),
+      reason,
+      // Giving a reason here answers the iPhone prompt too, so it isn't asked again.
+      markExplained: reason ? true : undefined,
       markReviewed: fd.get("markReviewed") === "on",
       createRule: fd.get("createRule") === "on",
     });

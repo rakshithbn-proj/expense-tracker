@@ -18,7 +18,7 @@ import { SheetsClient, SpreadsheetNotFoundError, SHEETS_SCOPE, type SheetValue, 
 export const SHEET_TITLE = "Transactions";
 const SPREADSHEET_TITLE = "Expense tracker";
 // Bump when the columns change, so every connected sheet is rewritten with the new layout.
-const LAYOUT_VERSION = 1;
+const LAYOUT_VERSION = 2; // 2: added the "Why" column
 const WRITE_CHUNK_ROWS = 2000;
 
 export type SheetsDeps = { config: SheetsConfig; fetchImpl?: FetchLike; now?: () => Date };

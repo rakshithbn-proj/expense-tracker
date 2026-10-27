@@ -5,6 +5,7 @@ import { createAccount } from "@/server/finance/accounts-service";
 import { setBudget } from "@/server/finance/budgets-service";
 import { listCategories } from "@/server/finance/categories-service";
 import { correctTransaction, createTransaction, type CreateTransactionInput } from "@/server/finance/transactions-service";
+import { explainTransaction } from "@/server/explain/service";
 import { enqueueSource, resetForRetry } from "@/server/ingestion/queue";
 import { refreshNotifications } from "@/server/notifications/rules";
 import { applyNotifications, dismiss, listNotifications, markRead, unreadCount } from "@/server/notifications/service";
@@ -20,11 +21,12 @@ let clock: Date;
 const refresh = () => refreshNotifications(testDb(), userId, clock);
 const all = () => testDb().select().from(notifications).where(eq(notifications.userId, userId));
 const byKey = async (key: string) => (await all()).find((n) => n.dedupKey === key);
-// Open alerts other than the daily summary, which every refresh after 7 am creates.
+// Open alerts other than the daily summary (every refresh after 7 am creates one) and the
+// "payments to explain" reminder (every new payment creates one); both are tested on their own.
 const open = async () =>
   (await listNotifications(testDb(), userId)).active
     .map((n) => n.dedupKey)
-    .filter((k) => !k.startsWith("daily:"))
+    .filter((k) => !k.startsWith("daily:") && k !== "to_explain")
     .sort();
 
 const add = async (input: Partial<CreateTransactionInput>) =>
@@ -137,6 +139,15 @@ describe("conditions", () => {
     const n = (await byKey("uncategorized"))!;
     expect(n.title).toBe("2 transactions without a category");
     expect(n.readAt).not.toBeNull();
+  });
+
+  it("reminds about payments to explain until they're answered", async () => {
+    const tx = await add({});
+    await refresh();
+    expect((await byKey("to_explain"))!).toMatchObject({ title: "1 payment to explain", href: "/explain", resolvedAt: null });
+    await explainTransaction(testDb(), userId, tx.id, { categoryId: food, reason: "Lunch" });
+    await refresh();
+    expect((await byKey("to_explain"))!.resolvedAt).not.toBeNull();
   });
 
   it("can't be dismissed, only fixed", async () => {

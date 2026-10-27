@@ -7,6 +7,7 @@ import { gmailConnections, sheetsConnections, sourceHealth, transactionSources, 
 import { budgetReport } from "@/server/finance/budgets-service";
 import { lookups } from "@/server/finance/reports-service";
 import { summarizeRange } from "@/server/finance/transactions-service";
+import { getExplainSettings, listToExplain } from "@/server/explain/service";
 import { applyNotifications, type DesiredNotification } from "./service";
 
 // A source must fail this many times in a row before it's worth interrupting the user.
@@ -107,6 +108,8 @@ async function reviewRules(db: Database, userId: string): Promise<DesiredNotific
         and(
           live,
           isNull(transactions.categoryId),
+          // Once marked reviewed, an uncategorised payment is accepted as it is.
+          eq(transactions.needsReview, true),
           inArray(transactions.transactionType, ["purchase", "fee", "refund"]),
           ne(transactions.transactionStatus, "failed"),
         ),
@@ -140,6 +143,23 @@ async function reviewRules(db: Database, userId: string): Promise<DesiredNotific
     });
   }
   return out;
+}
+
+async function explainRule(db: Database, userId: string, now: Date): Promise<DesiredNotification[]> {
+  const settings = await getExplainSettings(db, userId, now);
+  if (!settings.enabled) return [];
+  const n = (await listToExplain(db, userId, now)).length;
+  if (n === 0) return [];
+  return [
+    {
+      key: "to_explain",
+      kind: "to_explain",
+      severity: "info",
+      title: `${plural(n, "payment")} to explain`,
+      body: "Say why each one was made and pick its category. Your iPhone asks at the scheduled times; you can also answer here.",
+      href: "/explain",
+    },
+  ];
 }
 
 async function budgetRules(db: Database, userId: string, now: Date): Promise<DesiredNotification[]> {
@@ -207,6 +227,7 @@ export async function refreshNotifications(db: Database, userId: string, now = n
       connectionRules(db, userId),
       captureRules(db, userId),
       reviewRules(db, userId),
+      explainRule(db, userId, now),
       budgetRules(db, userId, now),
       dailySummaryRule(db, userId, now),
     ])

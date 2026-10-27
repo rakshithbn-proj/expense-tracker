@@ -110,6 +110,7 @@ export default async function TransactionPage({ params }: PageProps<"/transactio
             <Fact label="Payment app">{t.paymentApp ?? <span className="text-muted">Not known</span>}</Fact>
             <Fact label="Reference">{t.referenceId ?? <span className="text-muted">None</span>}</Fact>
             {t.originalDescription && <Fact label="Original description">{t.originalDescription}</Fact>}
+            {t.reason && <Fact label="Why">{t.reason}</Fact>}
             {t.notes && <Fact label="Notes">{t.notes}</Fact>}
           </dl>
         </Card>
@@ -253,6 +254,10 @@ export default async function TransactionPage({ params }: PageProps<"/transactio
                     </option>
                   ))}
                 </select>
+              </label>
+              <label className="flex flex-col gap-1 text-xs font-medium text-muted">
+                Why was this?
+                <input name="reason" defaultValue={t.reason ?? ""} className={inputClass} maxLength={500} />
               </label>
               <label className="flex flex-col gap-1 text-xs font-medium text-muted">
                 Notes

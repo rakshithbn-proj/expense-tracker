@@ -7,8 +7,8 @@ import { CAPTURE_LABELS, formatDayHeading, formatInr, METHOD_LABELS, STATUS_LABE
 import { requireUser } from "@/server/auth/dal";
 import { db } from "@/server/db/client";
 import { lookups } from "@/server/finance/reports-service";
-import { listTransactions, type TransactionDto } from "@/server/finance/transactions-service";
-import { activeFilterCount, toServiceFilter, withParams, type FilterParams } from "./filters";
+import { listReasons, listTransactions, type TransactionDto } from "@/server/finance/transactions-service";
+import { activeFilterCount, NO_REASON, toServiceFilter, withParams, type FilterParams } from "./filters";
 
 export const metadata = { title: "Transactions · Expenses" };
 
@@ -41,7 +41,7 @@ export default async function TransactionsPage({ searchParams }: PageProps<"/tra
   const user = await requireUser();
   const raw = await searchParams;
   const params: FilterParams = Object.fromEntries(Object.entries(raw).filter(([, v]) => typeof v === "string")) as FilterParams;
-  const names = await lookups(db(), user.id);
+  const [names, reasons] = await Promise.all([lookups(db(), user.id), listReasons(db(), user.id)]);
 
   let result: Awaited<ReturnType<typeof listTransactions>> | null = null;
   let error: string | null = null;
@@ -93,6 +93,7 @@ export default async function TransactionsPage({ searchParams }: PageProps<"/tra
           <Select name="account" label="Account or card" value={params.account} options={[...names.accountName.entries()]} />
           <Select name="method" label="Payment method" value={params.method} options={PAYMENT_METHODS.map((m): [string, string] => [m, METHOD_LABELS[m]])} />
           <Field name="app" label="Payment app (when known)" value={params.app} placeholder="e.g. PhonePe" />
+          <Select name="why" label="Why" value={params.why} options={[[NO_REASON, "Not given"], ...reasons.map((r): [string, string] => [r, r])]} />
           <Field name="min" label="Min amount (₹)" type="number" value={params.min} />
           <Field name="max" label="Max amount (₹)" type="number" value={params.max} />
           <Select name="status" label="Status" value={params.status} options={TRANSACTION_STATUSES.map((s): [string, string] => [s, STATUS_LABELS[s]])} />

@@ -27,6 +27,7 @@ const KINDS = {
   capture_issues: { autoResolve: true, renotify: true },
   uncategorized: { autoResolve: true, renotify: false },
   needs_review: { autoResolve: true, renotify: false },
+  to_explain: { autoResolve: true, renotify: false },
   sheets_auth: { autoResolve: true, renotify: true },
   sheets_failing: { autoResolve: true, renotify: true },
   budget: { autoResolve: false, renotify: false },

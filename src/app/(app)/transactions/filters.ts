@@ -1,8 +1,11 @@
 import type { ListFilter } from "@/server/finance/transactions-service";
 
+// "why" value for transactions without a reason.
+export const NO_REASON = "__none";
+
 // URL parameters used by the filter form (short, human-readable) mapped to the service filter.
 export type FilterParams = Partial<
-  Record<"q" | "from" | "to" | "category" | "account" | "method" | "app" | "min" | "max" | "status" | "type" | "capture" | "review" | "sort" | "page", string>
+  Record<"q" | "from" | "to" | "category" | "account" | "method" | "app" | "why" | "min" | "max" | "status" | "type" | "capture" | "review" | "sort" | "page", string>
 >;
 
 const rupeesToPaise = (v: string | undefined) => {
@@ -22,6 +25,8 @@ export function toServiceFilter(p: FilterParams): ListFilter {
     accountIds: p.account ? [p.account] : undefined,
     paymentMethods: p.method ? [p.method as never] : undefined,
     paymentApps: p.app ? [p.app] : undefined,
+    reasons: p.why && p.why !== NO_REASON ? [p.why] : undefined,
+    noReason: p.why === NO_REASON ? true : undefined,
     minAmountPaise: rupeesToPaise(p.min),
     maxAmountPaise: rupeesToPaise(p.max),
     statuses: p.status ? [p.status as never] : undefined,
@@ -35,7 +40,7 @@ export function toServiceFilter(p: FilterParams): ListFilter {
   };
 }
 
-export const FILTER_KEYS = ["q", "from", "to", "category", "account", "method", "app", "min", "max", "status", "type", "capture", "review"] as const;
+export const FILTER_KEYS = ["q", "from", "to", "category", "account", "method", "app", "why", "min", "max", "status", "type", "capture", "review"] as const;
 
 export function activeFilterCount(p: FilterParams): number {
   return FILTER_KEYS.filter((k) => p[k]).length;

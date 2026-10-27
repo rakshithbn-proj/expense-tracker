@@ -66,6 +66,8 @@ export function toDto(r: Row) {
     needsReview: r.needsReview,
     reviewReason: r.reviewReason,
     notes: r.notes,
+    reason: r.reason,
+    explainedAt: r.explainedAt?.toISOString() ?? null,
     isSample: r.isSample,
     voidedAt: r.voidedAt?.toISOString() ?? null,
   };
@@ -356,6 +358,8 @@ export const listFilterSchema = z.object({
   accountIds: csv(z.string().uuid()),
   paymentMethods: csv(z.enum(PAYMENT_METHODS)),
   paymentApps: csv(z.string().max(60)),
+  reasons: csv(z.string().max(500)),
+  noReason: bool,
   types: csv(z.enum(TRANSACTION_TYPES)),
   statuses: csv(z.enum(TRANSACTION_STATUSES)),
   captureMethods: csv(z.enum(CAPTURE_METHODS)),
@@ -392,6 +396,14 @@ function filterCondition(userId: string, f: z.output<typeof listFilterSchema>) {
   if (f.accountIds?.length) where.push(inArray(transactions.financialAccountId, f.accountIds));
   if (f.paymentMethods?.length) where.push(inArray(transactions.paymentMethod, f.paymentMethods));
   if (f.paymentApps?.length) where.push(inArray(transactions.paymentApp, f.paymentApps));
+  if (f.reasons?.length || f.noReason) {
+    where.push(
+      or(
+        f.reasons?.length ? inArray(transactions.reason, f.reasons) : sql`false`,
+        f.noReason ? or(isNull(transactions.reason), eq(transactions.reason, ""))! : sql`false`,
+      )!,
+    );
+  }
   if (f.types?.length) where.push(inArray(transactions.transactionType, f.types));
   if (f.statuses?.length) where.push(inArray(transactions.transactionStatus, f.statuses));
   if (f.captureMethods?.length) where.push(inArray(transactions.captureMethod, f.captureMethods));
@@ -424,6 +436,16 @@ export async function listTransactions(db: Executor, userId: string, rawFilter: 
   return { items: rows.map(toDto), total, page: f.page, pageSize: f.pageSize };
 }
 
+// Every distinct "why" the user has given, for the transactions filter.
+export async function listReasons(db: Executor, userId: string): Promise<string[]> {
+  const rows = await db
+    .selectDistinct({ reason: transactions.reason })
+    .from(transactions)
+    .where(and(eq(transactions.userId, userId), isNull(transactions.voidedAt), ne(transactions.reason, "")))
+    .orderBy(asc(transactions.reason));
+  return rows.map((r) => r.reason).filter((r): r is string => r !== null);
+}
+
 export const EXPORT_ROW_LIMIT = 100_000;
 
 // Every transaction matching the filter (paging ignored), for exports and the Sheets sync.
@@ -454,6 +476,10 @@ export const correctionSchema = z
     paymentApp: patchText(60),
     financialAccountId: z.string().uuid().nullable().optional(),
     notes: patchText(2000),
+    // Why the payment was made, in the user's words.
+    reason: patchText(500),
+    // The user has answered the "explain" prompt for this payment.
+    markExplained: z.boolean().optional(),
     markReviewed: z.boolean().optional(),
     // Explicit opt-in: future transactions from this merchant get the same category.
     createRule: z.boolean().optional(),
@@ -495,6 +521,8 @@ export async function correctTransaction(db: Database, userId: string, id: strin
     if (patch.paymentApp !== undefined) update.paymentApp = patch.paymentApp;
     if (patch.financialAccountId !== undefined) update.financialAccountId = patch.financialAccountId;
     if (patch.notes !== undefined) update.notes = patch.notes;
+    if (patch.reason !== undefined) update.reason = patch.reason;
+    if (patch.markExplained) update.explainedAt = before.explainedAt ?? new Date();
     if (patch.markReviewed) {
       update.needsReview = false;
       update.reviewReason = null;

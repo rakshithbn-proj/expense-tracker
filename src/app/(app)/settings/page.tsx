@@ -9,6 +9,7 @@ import { listDeviceKeys } from "@/server/ingestion/shortcut/keys";
 import { formatDateTime } from "@/lib/format";
 import { sheetsConfig } from "@/server/env";
 import { getSheetsConnection } from "@/server/sheets/service";
+import { getExplainSettings, parseSlotTimes, formatSlotTimes } from "@/server/explain/service";
 import { DeviceKeyCreator } from "./device-keys";
 import {
   addAccountAction,
@@ -17,6 +18,7 @@ import {
   disconnectSheetsAction,
   revokeDeviceKeyAction,
   syncSheetsNowAction,
+  updateExplainSettingsAction,
   toggleAccountAction,
   toggleRuleAction,
   updateCategoryAction,
@@ -80,6 +82,7 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
     listDeviceKeys(db(), user.id),
     getSheetsConnection(db(), user.id),
   ]);
+  const explain = await getExplainSettings(db(), user.id);
   const sheetsConnected = sheets?.status === "connected";
 
   return (
@@ -190,6 +193,36 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
           A key lets a Shortcut on your phone send transactions to this app, and nothing else: it can&apos;t read your data. Only a fingerprint of
           it is stored. It sits inside the Shortcut, so never share that Shortcut; if you do, or lose the phone, revoke the key here. Each key is
           limited to 120 submissions an hour.
+        </Definition>
+      </Card>
+
+      <Card title="Explain prompts (iPhone)" className="scroll-mt-4">
+        <div id="explain">
+          <ActionForm action={updateExplainSettingsAction} submitLabel="Save schedule" buttonClassName={buttonClass} testId="explain-settings-form">
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" name="enabled" defaultChecked={explain.enabled} className="h-4 w-4" />
+              Ask me on my iPhone why each payment was made
+            </label>
+            <div className="grid gap-3 md:grid-cols-2">
+              <label className={label}>
+                Ask at these times (India time, 24-hour)
+                <input name="slotTimes" required defaultValue={formatSlotTimes(parseSlotTimes(explain.slotTimes))} className={inputClass} />
+              </label>
+              <label className={label}>
+                If skipped or not seen, ask again after (minutes)
+                <input name="retryMinutes" type="number" min={5} max={180} required defaultValue={explain.retryMinutes} className={inputClass} />
+              </label>
+            </div>
+          </ActionForm>
+        </div>
+        <Definition>
+          At each time, payments captured since the previous one become due. Your phone shows them the next time the Shortcut runs (when you
+          open one of your everyday apps), so a locked phone just means it waits. Skipped payments come back after the retry interval. Only
+          spending is asked about, and only payments captured since {formatDateTime(explain.askFrom.toISOString())}. Unanswered ones wait on the{" "}
+          <a href="/explain" className="underline">
+            To explain
+          </a>{" "}
+          page. Setup: <code>docs/setup/explain-shortcut.md</code>.
         </Definition>
       </Card>
 

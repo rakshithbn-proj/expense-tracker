@@ -31,6 +31,7 @@ export function TransactionRow({
             {showDate && <span>{formatDayShort(t.transactionDate)}</span>}
             <span>{showType ? TYPE_LABELS[t.transactionType] : (category ?? "Uncategorized")}</span>
             {t.financialAccountId && <span className="truncate">{accountName.get(t.financialAccountId)}</span>}
+            {t.reason && <span className="truncate">{t.reason}</span>}
             {t.transactionStatus !== "posted" && (
               <Badge tone={t.transactionStatus === "pending" ? "info" : "neutral"}>{STATUS_LABELS[t.transactionStatus]}</Badge>
             )}

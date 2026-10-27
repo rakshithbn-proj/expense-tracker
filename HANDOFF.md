@@ -95,6 +95,9 @@ npm.cmd run test:e2e     # build + Playwright (own throwaway DB on 5435, port 31
   files and orphaned PG18 `--forkchild` helpers holding ports. Use `scripts/lib/local-pg.ts`
   (`pg_ctl` with stdio ignored; piping its output hangs the caller). Test DBs call
   `removeOrphanedPostgresHelpers()` first.
+- **Endless page reloads in dev** ("HMR hash mismatch" on every load, `Compiled in 0ms` repeating in
+  `web.log`) came from a damaged Turbopack dev cache after force-kills. `next.config.ts` now sets
+  `turbopackFileSystemCacheForDev: false`. If it ever recurs: `app:stop`, delete `.next/dev`, `app:start`.
 - The Claude sandbox can't signal processes it didn't start; process control may need
   `dangerouslyDisableSandbox`.
 - **The E2E server deliberately blanks the Google env vars** so tests never use the user's
@@ -142,6 +145,14 @@ formats: unrecognised alerts, SMS and receipts go to a masked review queue (kept
 > statement import is built; remaining gaps need real samples (savings-account emails, other
 > SMS, UPI receipts) or live confirmation (HDFC/ICICI/RBL card emails, SMS automation reliability).
 
+0. **Explain prompts (ADR-0009)** built server-side: iPhone "Explain payments" Shortcut asks
+   category + why for each new spending payment (schedule and 15-min retry in Settings; To
+   explain page). The user must still build the Shortcut and automations
+   (`docs/setup/explain-shortcut.md`) and confirm it works on the phone. On 2026-10-26 all 30
+   transactions then awaiting review were marked reviewed at the user's request (audited), and
+   prompts start from that moment.
+   **Keep `docs/server-transition.md` updated** with anything that depends on where the app
+   runs (the user asked to track every change needed for the move to the server).
 1. Everything up to Milestone 7 is pushed (CI green). The ICICI SMS commit and the
    capture-status fix are committed locally but not pushed: push only when the user asks.
 2. **Milestone 7 is done.** Sheets connected live to the account the user chose (they type it in

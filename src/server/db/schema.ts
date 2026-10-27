@@ -212,6 +212,10 @@ export const transactions = pgTable(
     needsReview: boolean("needs_review").notNull().default(false),
     reviewReason: text("review_reason"),
     notes: text("notes"),
+    // Why the user made this payment, in their own words (asked by the "explain" prompts).
+    reason: text("reason"),
+    // Set once the user has answered for this payment (category confirmed, reason optional).
+    explainedAt: timestamp("explained_at", { withTimezone: true }),
     isSample: boolean("is_sample").notNull().default(false),
     // Voided entries stay in the database for the audit trail and are excluded everywhere.
     voidedAt: timestamp("voided_at", { withTimezone: true }),
@@ -428,3 +432,20 @@ export const sheetsConnections = pgTable("sheets_connections", {
   lastError: text("last_error"),
   ...timestamps,
 });
+
+// When the iPhone "explain" Shortcut should ask about new payments (Milestone 7 follow-up).
+// Payments become due at the next slot time after they were captured; once asked, nothing is
+// asked again until prompt_lease_until (the retry interval), so a skipped batch returns later.
+export const explainSettings = pgTable("explain_settings", {
+  userId: uuid("user_id")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  enabled: boolean("enabled").notNull().default(true),
+  // India-time slots, "HH:MM" comma-separated.
+  slotTimes: text("slot_times").notNull().default("09:00,12:00,15:00,18:00,21:00"),
+  retryMinutes: integer("retry_minutes").notNull().default(15),
+  // Only payments captured from this moment are asked about, so the history isn't one huge batch.
+  askFrom: timestamp("ask_from", { withTimezone: true }).notNull().defaultNow(),
+  promptLeaseUntil: timestamp("prompt_lease_until", { withTimezone: true }),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [check("explain_settings_retry", sql`${t.retryMinutes} between 5 and 180`)]);

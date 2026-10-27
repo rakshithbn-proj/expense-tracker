@@ -11,6 +11,7 @@ import { createAccount, updateAccount } from "@/server/finance/accounts-service"
 import { createCategory, updateCategory } from "@/server/finance/categories-service";
 import { setRuleActive } from "@/server/finance/rules-service";
 import { env, sheetsConfig } from "@/server/env";
+import { updateExplainSettings } from "@/server/explain/service";
 import { createDeviceKey, revokeDeviceKey } from "@/server/ingestion/shortcut/keys";
 import { disconnectSheets, syncSheets } from "@/server/sheets/service";
 import type { KeyState } from "./device-keys";
@@ -120,5 +121,17 @@ export async function disconnectSheetsAction(): Promise<ActionState> {
   return runAction(async () => {
     await disconnectSheets(db(), user.id, { config: sheets() });
     return done("Disconnected, and access revoked at Google. The spreadsheet stays in your Google Drive but is no longer updated.");
+  });
+}
+
+export async function updateExplainSettingsAction(_prev: ActionState, fd: FormData): Promise<ActionState> {
+  const user = await requireUser();
+  return runAction(async () => {
+    await updateExplainSettings(db(), user.id, {
+      enabled: formString(fd, "enabled") === "on",
+      slotTimes: formString(fd, "slotTimes") ?? "",
+      retryMinutes: Number(formString(fd, "retryMinutes")),
+    });
+    return done("Schedule saved.");
   });
 }

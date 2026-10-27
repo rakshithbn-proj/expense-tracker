@@ -43,6 +43,13 @@
       "when": 1793025628912,
       "tag": "0005_sheets_account_email",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793029243354,
+      "tag": "0006_explain_prompts",
+      "breakpoints": true
     }
   ]
 }
