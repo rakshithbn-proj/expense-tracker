@@ -4,16 +4,22 @@ Everything that must change when the app moves from the Windows PC (`http://<PC 
 to the VPS (`https://YOUR-DOMAIN`). Keep this updated whenever something is added that
 depends on where the app runs. Milestone 9 works through this list.
 
+**Status (2026-10-27):** live on the VPS behind the server's existing Traefik
+(`deploy/compose.traefik.yaml`); database copied through an SSH tunnel; PC copy stopped.
+Remaining: Google redirect URIs, Shortcut URLs, PWA, verification on mobile data.
+
 ## 1. Data and secrets
 
-- [ ] Copy the database: `pg_dump` the local database (port 5433) and restore it on the server,
-      so transactions, rules, settings, device keys and connections carry over.
-- [ ] Use the **same `TOKEN_ENCRYPTION_KEY`** on the server. The stored Gmail and Google Sheets
+- [x] Copy the database: `pg_dump` the local database (port 5433) and restore it on the server,
+      so transactions, rules, settings, device keys and connections carry over. The PC has no
+      `pg_dump` (embedded PostgreSQL ships only the server): install the PostgreSQL 18
+      command-line tools first, or dump through an SSH tunnel from the VPS (HANDOFF.md, step 5).
+- [x] Use the **same `TOKEN_ENCRYPTION_KEY`** on the server. The stored Gmail and Google Sheets
       refresh tokens are encrypted with it; with the same key neither needs reconnecting.
-- [ ] Same `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` in the server's `.env`.
-- [ ] Set `APP_ORIGIN=https://YOUR-DOMAIN`. It builds the OAuth redirect addresses and the
+- [x] Same `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` in the server's `.env`.
+- [x] Set `APP_ORIGIN=https://YOUR-DOMAIN` (compose builds it from `DOMAIN` in `.env`). It builds the OAuth redirect addresses and the
       endpoint shown when creating a device key.
-- [ ] Create the server login (`user:create`) only if the database isn't copied.
+- [x] ~~Create the server login~~: not needed, the database was copied.
 
 ## 2. Google Cloud console (same project)
 
@@ -47,11 +53,12 @@ What improves: Shortcuts then work **away from home**. Until then they work on h
 
 ## 5. Running services
 
-- [ ] `docker compose up -d` (db, migrate, web, worker, caddy). The worker replaces
+- [x] `docker compose up -d` (db, migrate, web, worker; caddy, or the existing Traefik via
+      `deploy/compose.traefik.yaml`). The worker replaces
       `npm run app:start` on the PC; check `docker compose ps` shows it running.
-- [ ] Stop the PC's worker (`npm.cmd run app:stop`) once the server is live, so two workers
+- [x] Stop the PC's worker (`npm.cmd run app:stop`) once the server is live, so two workers
       don't both poll Gmail. (Double capture would be deduplicated, but there's no reason to run both.)
-- [ ] HTTPS certificate via Caddy, then confirm cookies are `Secure` (automatic in production).
+- [x] HTTPS certificate (Let's Encrypt via the server's Traefik), HSTS on. Confirm cookies are `Secure` (automatic in production).
 
 ## 6. Things that become possible on the server (not built yet)
 
