@@ -46,5 +46,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: docker build -t expense-tracker:ci .
-      - name: Validate compose file
-        run: DOMAIN=ci.example.com POSTGRES_PASSWORD=ci docker compose config --quiet
+      - name: Validate compose files
+        run: |
+          DOMAIN=ci.example.com POSTGRES_PASSWORD=ci docker compose config --quiet
+          DOMAIN=ci.example.com POSTGRES_PASSWORD=ci TRAEFIK_NETWORK=proxy TRAEFIK_CERTRESOLVER=le \
+            docker compose -f compose.yaml -f deploy/compose.traefik.yaml config --quiet

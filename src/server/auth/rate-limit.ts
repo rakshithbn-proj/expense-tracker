@@ -9,7 +9,7 @@ export const MAX_FAILURES_PER_IP = 5;
 // Caps distributed guessing against the single account.
 export const MAX_FAILURES_GLOBAL = 20;
 
-// Caddy overwrites X-Forwarded-For with the real client address, so the first entry is trusted.
+// Caddy (or Traefik, which drops untrusted forwarded headers) overwrites X-Forwarded-For with the real client address, so the first entry is trusted.
 export function normalizeIp(raw: string | null | undefined): string | null {
   const candidate = raw?.split(",")[0]?.trim();
   return candidate && isIP(candidate) ? candidate : null;
