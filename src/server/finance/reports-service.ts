@@ -39,12 +39,16 @@ export async function loadAnalyzed(db: Executor, userId: string, range: Range): 
 
   const parentIds = [...new Set(rows.map((r) => r.parentTransactionId).filter((p): p is string => !!p))];
   const parents = new Map<string, ParentInfo>();
+  const parentReasons = new Map<string, string | null>();
   if (parentIds.length) {
     const ps = await db
-      .select({ id: transactions.id, categoryId: transactions.categoryId })
+      .select({ id: transactions.id, categoryId: transactions.categoryId, reason: transactions.reason })
       .from(transactions)
       .where(and(eq(transactions.userId, userId), inArray(transactions.id, parentIds)));
-    for (const p of ps) parents.set(p.id, { categoryId: p.categoryId });
+    for (const p of ps) {
+      parents.set(p.id, { categoryId: p.categoryId });
+      parentReasons.set(p.id, p.reason);
+    }
   }
 
   const items = rows.map((r): AnalyzedTx => {
@@ -78,6 +82,7 @@ export async function loadAnalyzed(db: Executor, userId: string, range: Range): 
       effectCategoryId: effect?.categoryId ?? null,
       captureMethod: r.captureMethod,
       isSample: r.isSample,
+      reason: (r.parentTransactionId ? parentReasons.get(r.parentTransactionId) : null) || r.reason || null,
       ledger,
     };
   });
@@ -117,8 +122,9 @@ export async function lookups(db: Executor, userId: string) {
   };
 }
 
-// Everything the overview page shows for one month.
-export async function overview(db: Executor, userId: string, month: string, today = istDate(new Date())) {
+// Everything the overview page shows for one month. `reason` narrows only the net spending
+// figure (and its comparison) to one "why"; null means all spending.
+export async function overview(db: Executor, userId: string, month: string, today = istDate(new Date()), reason: string | null = null) {
   const { start, end } = monthRange(month);
   const historyStart = `${addMonths(month, -3)}-01`;
   const isCurrent = today.startsWith(month);
@@ -143,6 +149,8 @@ export async function overview(db: Executor, userId: string, month: string, toda
 
   const current = history.items.filter((t) => t.date >= start && t.date < end);
   const [thisSummary, prevSummary] = summarizeMonths(history, [month, previousMonth]);
+  const forReason = reason === null ? history : { items: history.items.filter((t) => t.reason === reason), parents: history.parents };
+  const [reasonSummary] = reason === null ? [thisSummary] : summarizeMonths(forReason, [month]);
 
   const refundsAndReversals = await db
     .select()
@@ -165,8 +173,12 @@ export async function overview(db: Executor, userId: string, month: string, toda
     throughDay,
     summary: thisSummary,
     previous: prevSummary,
-    // Same days of the previous month, so a part-month is compared fairly.
-    previousSameDaysPaise: cumulativeByDay(history.items, previousMonth)[Math.min(throughDay, daysInMonth(previousMonth)) - 1] ?? 0,
+    netSpending: {
+      reason,
+      summary: reasonSummary,
+      // Same days of the previous month, so a part-month is compared fairly.
+      previousSameDaysPaise: cumulativeByDay(forReason.items, previousMonth)[Math.min(throughDay, daysInMonth(previousMonth)) - 1] ?? 0,
+    },
     cumulative: {
       current: cumulativeByDay(current, month).slice(0, throughDay),
       previous: cumulativeByDay(history.items, previousMonth),

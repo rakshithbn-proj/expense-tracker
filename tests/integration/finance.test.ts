@@ -17,6 +17,7 @@ import {
   listReasons,
   listTransactions,
   summarizeMonth,
+  totalsForFilter,
   unlinkTransaction,
   voidTransaction,
   type CreateTransactionInput,
@@ -288,6 +289,18 @@ describe("filtering", () => {
     expect(await listReasons(testDb(), userId)).toEqual(["Home Expense", "Rakshith Personal"]);
     expect(await ids({ reasons: ["Home Expense"] })).toEqual(["BigBasket"]);
     expect((await ids({ noReason: true })).sort()).toEqual(["100%_off store", "IRCTC"]);
+  });
+
+  it("filters by several accounts at once, as the account checkboxes send them", async () => {
+    expect((await ids({ accountIds: [card, bank] })).sort()).toEqual(["100%_off store", "BigBasket", "IRCTC", "Swiggy"]);
+    expect((await ids({ accountIds: `${card},${bank2}` } as never)).sort()).toEqual(["BigBasket"]);
+  });
+
+  it("totals money out and in across every match, leaving out failed payments", async () => {
+    await create({ merchantName: "Refund", amountPaise: 150_00, transactionDate: "2026-10-06", direction: "credit", transactionType: "refund" });
+    expect(await totalsForFilter(testDb(), userId, { from: "2026-10-01" })).toEqual({ outPaise: 2700_00, inPaise: 150_00, netPaise: -2550_00 });
+    expect(await totalsForFilter(testDb(), userId, { accountIds: [card] })).toEqual({ outPaise: 2300_00, inPaise: 0, netPaise: -2300_00 });
+    expect(await totalsForFilter(testDb(), userId, { q: "nothing matches" })).toEqual({ outPaise: 0, inPaise: 0, netPaise: 0 });
   });
 
   it("accepts query-string style input and paginates with a stable order", async () => {

@@ -436,6 +436,29 @@ export async function listTransactions(db: Executor, userId: string, rawFilter: 
   return { items: rows.map(toDto), total, page: f.page, pageSize: f.pageSize };
 }
 
+// Money out and in across every match (not just one page). Like the day headings, failed and
+// reversed payments are left out because no money moved; only INR amounts are added up.
+export async function totalsForFilter(db: Executor, userId: string, rawFilter: ListFilter) {
+  const f = listFilterSchema.parse(rawFilter);
+  const [row] = await db
+    .select({
+      out: sql<string>`coalesce(sum(${transactions.amount}) filter (where ${transactions.direction} = 'debit'), 0)`,
+      in: sql<string>`coalesce(sum(${transactions.amount}) filter (where ${transactions.direction} = 'credit'), 0)`,
+    })
+    .from(transactions)
+    .where(
+      and(
+        filterCondition(userId, f),
+        eq(transactions.currency, "INR"),
+        ne(transactions.transactionStatus, "failed"),
+        ne(transactions.transactionStatus, "reversed"),
+      ),
+    );
+  const outPaise = decimalToPaise(row.out);
+  const inPaise = decimalToPaise(row.in);
+  return { outPaise, inPaise, netPaise: inPaise - outPaise };
+}
+
 // Every distinct "why" the user has given, for the transactions filter.
 export async function listReasons(db: Executor, userId: string): Promise<string[]> {
   const rows = await db

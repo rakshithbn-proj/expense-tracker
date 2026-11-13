@@ -4,7 +4,7 @@ import { decimalToPaise } from "@/lib/money";
 import { createAccount } from "@/server/finance/accounts-service";
 import { listCategories } from "@/server/finance/categories-service";
 import { lookups, overview, reports, summarizeMonths, loadAnalyzed } from "@/server/finance/reports-service";
-import { createTransaction, summarizeMonth, voidTransaction, type CreateTransactionInput } from "@/server/finance/transactions-service";
+import { createTransaction, linkRefund, summarizeMonth, voidTransaction, type CreateTransactionInput } from "@/server/finance/transactions-service";
 import { createOwner } from "@/server/users";
 import { closeTestDb, resetDb, testDb } from "../support/db";
 
@@ -107,6 +107,30 @@ describe("dashboard and reports agree with the database", () => {
     const view = await overview(testDb(), userId, "2026-10", "2026-10-22");
     const shopping = view.byCategory.find((g) => g.key === cat.shopping);
     expect(shopping?.paise).toBe(1899_00 - 1899_00 - 1000_00);
+  });
+
+  it("narrows net spending to one 'why'; a linked refund counts under its purchase's why", async () => {
+    const setWhy = (merchant: string, reason: string) =>
+      testDb().execute(sql`update transactions set reason = ${reason} where user_id = ${userId} and merchant_name = ${merchant} and direction = 'debit'`);
+    await setWhy("SWIGGY", "Shared Rental Expense");
+    await setWhy("AMAZON", "Shared Rental Expense");
+    await setWhy("BIGBASKET", "Home Expense");
+    const [purchase] = (await testDb().execute<{ id: string }>(sql`select id from transactions where merchant_name = 'AMAZON' and direction = 'debit'`)).rows;
+    const [refund] = (
+      await testDb().execute<{ id: string; parent: string | null }>(
+        sql`select id, parent_transaction_id as parent from transactions where merchant_name = 'AMAZON' and direction = 'credit'`,
+      )
+    ).rows;
+    if (refund.parent !== purchase.id) await linkRefund(testDb(), userId, refund.id, purchase.id);
+
+    const shared = await overview(testDb(), userId, "2026-10", "2026-10-22", "Shared Rental Expense");
+    expect(shared.netSpending.summary.netSpendPaise).toBe(412_00 + 1899_00 - 1899_00);
+    expect(shared.netSpending.summary.refundsPaise).toBe(1899_00);
+    // Everything else on the page stays on all spending.
+    expect(shared.summary.netSpendPaise).toBe(await sqlNetSpending("2026-10"));
+
+    const all = await overview(testDb(), userId, "2026-10", "2026-10-22");
+    expect(all.netSpending.summary).toEqual(all.summary);
   });
 
   it("monthly report rows match the per-month summaries", async () => {

@@ -22,6 +22,8 @@ export type AnalyzedTx = {
   effectCategoryId: string | null;
   captureMethod: CaptureMethod;
   isSample: boolean;
+  // The user's "why"; a linked refund or reversal takes its original purchase's.
+  reason: string | null;
   ledger: LedgerTransaction; // what summarize() consumes
 };
 

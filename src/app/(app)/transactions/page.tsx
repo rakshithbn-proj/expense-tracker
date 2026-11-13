@@ -7,8 +7,8 @@ import { CAPTURE_LABELS, formatDayHeading, formatInr, METHOD_LABELS, STATUS_LABE
 import { requireUser } from "@/server/auth/dal";
 import { db } from "@/server/db/client";
 import { lookups } from "@/server/finance/reports-service";
-import { listReasons, listTransactions, type TransactionDto } from "@/server/finance/transactions-service";
-import { activeFilterCount, NO_REASON, toServiceFilter, withParams, type FilterParams } from "./filters";
+import { listReasons, listTransactions, totalsForFilter, type TransactionDto } from "@/server/finance/transactions-service";
+import { activeFilterCount, NO_REASON, toFilterParams, toServiceFilter, withParams } from "./filters";
 
 export const metadata = { title: "Transactions · Expenses" };
 
@@ -28,6 +28,34 @@ function Select({ name, label, value, options }: { name: string; label: string; 
   );
 }
 
+function Checkboxes({ name, label, values, options }: { name: string; label: string; values: string[]; options: [string, string][] }) {
+  return (
+    <fieldset className="col-span-2 flex flex-col gap-1 text-xs font-medium text-muted">
+      <legend className="mb-1">{label}</legend>
+      {options.length === 0 && <span>None yet</span>}
+      <div className="flex flex-col gap-1.5 sm:grid sm:grid-cols-2">
+        {options.map(([v, l]) => (
+          <label key={v} className="flex items-center gap-2 text-sm font-normal text-foreground">
+            <input type="checkbox" name={name} value={v} defaultChecked={values.includes(v)} className="h-4 w-4 shrink-0" />
+            <span className="truncate">{l}</span>
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
+
+function Total({ label, paise, signed = false }: { label: string; paise: number; signed?: boolean }) {
+  return (
+    <div className="flex flex-col">
+      <span className="text-xs text-muted">{label}</span>
+      <span className="text-lg font-semibold tabular-nums">
+        {signed ? `${paise < 0 ? "−" : "+"}${formatInr(Math.abs(paise))}` : formatInr(paise)}
+      </span>
+    </div>
+  );
+}
+
 function Field({ name, label, value, type = "text", placeholder }: { name: string; label: string; value?: string; type?: string; placeholder?: string }) {
   return (
     <label className="flex flex-col gap-1 text-xs font-medium text-muted">
@@ -40,19 +68,21 @@ function Field({ name, label, value, type = "text", placeholder }: { name: strin
 export default async function TransactionsPage({ searchParams }: PageProps<"/transactions">) {
   const user = await requireUser();
   const raw = await searchParams;
-  const params: FilterParams = Object.fromEntries(Object.entries(raw).filter(([, v]) => typeof v === "string")) as FilterParams;
+  const params = toFilterParams(raw);
   const [names, reasons] = await Promise.all([lookups(db(), user.id), listReasons(db(), user.id)]);
 
+  const active = activeFilterCount(params);
   let result: Awaited<ReturnType<typeof listTransactions>> | null = null;
+  let totals: Awaited<ReturnType<typeof totalsForFilter>> | null = null;
   let error: string | null = null;
   try {
-    result = await listTransactions(db(), user.id, toServiceFilter(params));
+    const filter = toServiceFilter(params);
+    [result, totals] = await Promise.all([listTransactions(db(), user.id, filter), active > 0 ? totalsForFilter(db(), user.id, filter) : null]);
   } catch (err) {
     if (!(err instanceof ZodError)) throw err;
     error = "Some filters aren't valid. Check the dates (YYYY-MM-DD) and amounts.";
   }
 
-  const active = activeFilterCount(params);
   const groups = new Map<string, TransactionDto[]>();
   for (const t of result?.items ?? []) groups.set(t.transactionDate, [...(groups.get(t.transactionDate) ?? []), t]);
   const sortedByDate = (params.sort ?? "date-desc").startsWith("date");
@@ -90,10 +120,10 @@ export default async function TransactionsPage({ searchParams }: PageProps<"/tra
             value={params.category}
             options={[["uncategorized", "Uncategorized"], ...names.categories.map((c): [string, string] => [c.id, c.name])]}
           />
-          <Select name="account" label="Account or card" value={params.account} options={[...names.accountName.entries()]} />
           <Select name="method" label="Payment method" value={params.method} options={PAYMENT_METHODS.map((m): [string, string] => [m, METHOD_LABELS[m]])} />
           <Field name="app" label="Payment app (when known)" value={params.app} placeholder="e.g. PhonePe" />
           <Select name="why" label="Why" value={params.why} options={[[NO_REASON, "Not given"], ...reasons.map((r): [string, string] => [r, r])]} />
+          <Checkboxes name="account" label="Account or card" values={params.account?.split(",") ?? []} options={[...names.accountName.entries()]} />
           <Field name="min" label="Min amount (₹)" type="number" value={params.min} />
           <Field name="max" label="Max amount (₹)" type="number" value={params.max} />
           <Select name="status" label="Status" value={params.status} options={TRANSACTION_STATUSES.map((s): [string, string] => [s, STATUS_LABELS[s]])} />
@@ -134,6 +164,16 @@ export default async function TransactionsPage({ searchParams }: PageProps<"/tra
       {result && (
         <>
           <SampleBanner count={result.items.filter((t) => t.isSample).length} />
+          {totals && (
+            <section aria-label="Totals for these filters" className="rounded-2xl border border-border bg-surface px-4 py-3" data-testid="filter-totals">
+              <div className="grid grid-cols-3 gap-3">
+                <Total label="Out" paise={totals.outPaise} />
+                <Total label="In" paise={totals.inPaise} />
+                <Total label="Net" paise={totals.netPaise} signed />
+              </div>
+              <p className="mt-1 text-xs text-muted">All matching transactions, every page. Failed and reversed payments are left out.</p>
+            </section>
+          )}
           <p className="text-sm text-muted" data-testid="result-count">
             {result.total} transaction{result.total === 1 ? "" : "s"}
             {pages > 1 ? ` · page ${result.page} of ${pages}` : ""}

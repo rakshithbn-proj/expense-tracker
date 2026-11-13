@@ -15,6 +15,14 @@
   --series-1: #2a78d6;
   --series-compare: #eb6834;
   --series-1-wash: rgba(42, 120, 214, 0.1);
+  /* Categorical slots 1-7 in fixed order (slot 1 = series-1, slot 2 = series-compare), validated
+     against both surfaces; "other" is neutral so it never reads as an eighth category. */
+  --series-3: #1baf7a;
+  --series-4: #eda100;
+  --series-5: #e87ba4;
+  --series-6: #008300;
+  --series-7: #6250d6;
+  --series-other: #b5b3ab;
   --grid: #e1e0d9;
   --axis: #c3c2b7;
   --ink-muted: #898781;
@@ -39,6 +47,12 @@
     --series-1: #3987e5;
     --series-compare: #d95926;
     --series-1-wash: rgba(57, 135, 229, 0.12);
+    --series-3: #199e70;
+    --series-4: #c98500;
+    --series-5: #d55181;
+    --series-6: #008300;
+    --series-7: #9085e9;
+    --series-other: #5f5e59;
     --grid: #2c2c2a;
     --axis: #383835;
     --track: #1f2b38;

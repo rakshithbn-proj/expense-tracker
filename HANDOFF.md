@@ -46,9 +46,10 @@ integration works until it's tested with real evidence; never fake or simulate c
 | 8 Security/backups | **Deferred by the user** (2026-10-26) | Backups (restic → B2/R2) become important once on the VPS; raise it after the move |
 | 9 Deploy + 30-day evaluation | **Deployed 2026-10-27**; Shortcuts/PWA switch and 30-day evaluation pending | See [Running on the VPS](#running-on-the-vps) |
 
-Tests: 301 unit/integration (Vitest, real embedded Postgres), all passing at `0278885`; lint and
-typecheck clean. E2E (Playwright) includes `tests/e2e/explain.spec.ts`; run `npm.cmd run test:e2e`
-before deploying.
+Tests: 306 unit/integration (Vitest, real embedded Postgres); lint and typecheck clean. One
+pre-existing failure since ~Nov 2026: `gmail-ingestion.test.ts` "masked excerpt that expires"
+(fails on `91cccce` too; not yet investigated). E2E (Playwright) includes
+`tests/e2e/explain.spec.ts` and `filters-why.spec.ts`; run `npm.cmd run test:e2e` before deploying.
 
 ## Live integrations and the user's setup (no secrets here)
 
@@ -70,7 +71,10 @@ before deploying.
     and **"Why?" from a fixed list in the Shortcut**: Rakshith Personal, Shared Rental Expense,
     Nagabhushan, Home Expense, Mruthula Expense. POST `…/api/ingest/explain?format=text`.
     The reason is free text on the server; **Transactions → Filters → Why** lists the distinct
-    reasons used. The label shows amount · payee · method (UPI/Card…) · account · time.
+    reasons used. Migration `0007` renamed stored "Nagabhus" answers to "Nagabhushan" (the
+    Shortcut's list had the short form). The Overview's net spending is narrowed to one "why"
+    (dropdown; defaults to Shared Rental Expense when that reason exists, `?why=all` for
+    everything); the rest of the Overview stays on all spending. The label shows amount · payee · method (UPI/Card…) · account · time.
     Guide: `docs/setup/explain-shortcut.md`.
 - **PC network (temporary until the move):** the PC was given a manual Wi-Fi IP. It was
   mistyped once (`19.168.0.2`, mask /32), which made every Shortcut time out. Correct is

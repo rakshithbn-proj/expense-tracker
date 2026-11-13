@@ -28,6 +28,7 @@ const t = (o: Partial<AnalyzedTx> & { date: string; effectPaise: number }): Anal
     effectCategoryId: "food",
     captureMethod: "manual",
     isSample: false,
+    reason: null,
     ...o,
     amountPaise,
     ledger: { id: "x", amountPaise, currency: "INR", direction: "debit", type: "purchase", status: "posted", categoryId: null, parentTransactionId: null, voided: false },

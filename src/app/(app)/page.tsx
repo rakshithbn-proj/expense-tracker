@@ -4,6 +4,7 @@ import { BarList } from "@/components/charts/bar-list";
 import { BudgetMeter } from "@/components/charts/budget-meter";
 import { ColumnChart } from "@/components/charts/column-chart";
 import { LineCompareChart } from "@/components/charts/line-compare";
+import { PieChart } from "@/components/charts/pie-chart";
 import { InsightList } from "@/components/insight-list";
 import { MonthNav } from "@/components/month-nav";
 import { TransactionRow } from "@/components/transaction-row";
@@ -17,21 +18,33 @@ import { listToExplain } from "@/server/explain/service";
 import { db } from "@/server/db/client";
 import { daysInMonth } from "@/server/finance/analytics";
 import { lookups, overview } from "@/server/finance/reports-service";
+import { listReasons } from "@/server/finance/transactions-service";
+import { ReasonPicker } from "./reason-picker";
 
 export const metadata = { title: "Overview · Expenses" };
 
 const SPENDING_DEFINITION =
   "Net spending = purchases and fees (completed and pending) minus refunds. Own-account transfers, card bill payments, income, investments, cash withdrawals, failed and reversed payments are not spending.";
 
+// Net spending defaults to this "why" when the user has used it; "all" means every payment.
+const DEFAULT_REASON = "shared rental expense";
+const ALL_REASONS = "all";
+
 export default async function OverviewPage({ searchParams }: PageProps<"/">) {
   const user = await requireUser();
   const today = istDate(new Date());
   const currentMonth = today.slice(0, 7);
-  const requested = z.string().optional().parse((await searchParams).month);
+  const query = await searchParams;
+  const requested = z.string().optional().parse(query.month);
   const month = requested && isValidMonth(requested) && requested <= currentMonth ? requested : currentMonth;
 
+  const reasons = await listReasons(db(), user.id);
+  const requestedWhy = z.string().max(500).optional().catch(undefined).parse(query.why);
+  const why = requestedWhy ?? reasons.find((r) => r.toLowerCase() === DEFAULT_REASON) ?? ALL_REASONS;
+  const reason = why === ALL_REASONS ? null : why;
+
   const [data, names, capabilities, toExplain] = await Promise.all([
-    overview(db(), user.id, month, today),
+    overview(db(), user.id, month, today, reason),
     lookups(db(), user.id),
     captureCapabilities(db(), user.id),
     listToExplain(db(), user.id),
@@ -43,10 +56,11 @@ export default async function OverviewPage({ searchParams }: PageProps<"/">) {
   const catName = (id: string) => (id === "uncategorized" ? "Uncategorized" : (names.categoryName.get(id) ?? "Unknown category"));
   const monthQuery = `from=${month}-01&to=${month}-${String(daysInMonth(month)).padStart(2, "0")}`;
 
-  const vsPrevious = summary.netSpendPaise - data.previousSameDaysPaise;
+  const net = data.netSpending;
+  const vsPrevious = net.summary.netSpendPaise - net.previousSameDaysPaise;
   const prevLabel = formatMonthShort(addMonths(month, -1));
   const comparison =
-    data.previousSameDaysPaise === 0 && summary.netSpendPaise === 0
+    net.previousSameDaysPaise === 0 && net.summary.netSpendPaise === 0
       ? null
       : `${vsPrevious >= 0 ? "▲" : "▼"} ${formatInr(Math.abs(vsPrevious))} ${vsPrevious >= 0 ? "more" : "less"} than days 1–${data.throughDay} of ${prevLabel}`;
 
@@ -56,7 +70,7 @@ export default async function OverviewPage({ searchParams }: PageProps<"/">) {
   return (
     <div className="flex flex-col gap-4">
       <PageHeader title="Overview">
-        <MonthNav month={month} currentMonth={currentMonth} basePath="/" />
+        <MonthNav month={month} currentMonth={currentMonth} basePath="/" keep={requestedWhy ? { why: requestedWhy } : {}} />
       </PageHeader>
       <SampleBanner count={data.sampleCount} />
       {toExplain.length > 0 && (
@@ -73,20 +87,31 @@ export default async function OverviewPage({ searchParams }: PageProps<"/">) {
       )}
 
       <section className="rounded-2xl border border-border bg-surface p-5" aria-labelledby="net-spend-label">
-        <div id="net-spend-label" className="text-sm text-muted">
-          Net spending · {formatMonth(month)}
-          {data.isCurrent ? " so far" : ""}
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div id="net-spend-label" className="text-sm text-muted">
+            Net spending{reason ? ` · ${reason}` : ""} · {formatMonth(month)}
+            {data.isCurrent ? " so far" : ""}
+          </div>
+          <ReasonPicker month={month} value={why} reasons={reason && !reasons.includes(reason) ? [...reasons, reason] : reasons} />
         </div>
         <div className="mt-1 text-5xl font-semibold tracking-tight" data-testid="net-spending">
-          {formatInrWhole(summary.netSpendPaise)}
+          {formatInrWhole(net.summary.netSpendPaise)}
         </div>
         <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted">
-          <span>Spent {formatInr(summary.grossSpendPaise)}</span>
-          <span>Refunds −{formatInr(summary.refundsPaise)}</span>
-          {summary.pendingSpendPaise > 0 && <span>Includes {formatInr(summary.pendingSpendPaise)} pending</span>}
+          <span>Spent {formatInr(net.summary.grossSpendPaise)}</span>
+          <span>Refunds −{formatInr(net.summary.refundsPaise)}</span>
+          {net.summary.pendingSpendPaise > 0 && <span>Includes {formatInr(net.summary.pendingSpendPaise)} pending</span>}
         </div>
         {comparison && <div className="mt-2 text-sm">{comparison}</div>}
-        <Definition>{SPENDING_DEFINITION}</Definition>
+        {reason && (
+          <div className="mt-2 text-sm">
+            <TextLink href={`/transactions?${monthQuery}&why=${encodeURIComponent(reason)}`}>See these payments</TextLink>
+          </div>
+        )}
+        <Definition>
+          {SPENDING_DEFINITION}
+          {reason ? ` Only payments explained with “${reason}” count here (a refund counts under its purchase's reason); the rest of this page covers all spending.` : ""}
+        </Definition>
       </section>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -117,7 +142,7 @@ export default async function OverviewPage({ searchParams }: PageProps<"/">) {
         </Card>
       ) : (
         <>
-          <Card title="Spending through the month">
+          <Card title={reason ? "All spending through the month" : "Spending through the month"}>
             <LineCompareChart
               caption={`Cumulative net spending by day: ${formatMonth(month)} compared with ${formatMonth(addMonths(month, -1))}`}
               xLabels={Array.from({ length: Math.max(data.cumulative.previous.length, data.cumulative.current.length) }, (_, i) => `Day ${i + 1}`)}
@@ -130,7 +155,8 @@ export default async function OverviewPage({ searchParams }: PageProps<"/">) {
 
           <div className="grid gap-4 lg:grid-cols-2">
             <Card title="By category" action={<TextLink href="/reports?r=category">Report</TextLink>}>
-              <BarList
+              <PieChart
+                caption={`Net spending by category in ${formatMonth(month)}`}
                 items={data.byCategory.map((g) => ({
                   key: g.key,
                   label: catName(g.key),
