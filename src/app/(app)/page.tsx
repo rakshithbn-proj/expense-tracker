@@ -162,20 +162,20 @@ export default async function OverviewPage({ searchParams }: PageProps<"/">) {
             />
           </Card>
 
-          <div className="grid gap-4 lg:grid-cols-2">
-            <Card title="By category" action={<TextLink href="/reports?r=category">Report</TextLink>}>
-              <PieChart
-                caption={`Net spending by category in ${formatMonth(month)}`}
-                items={data.byCategory.map((g) => ({
-                  key: g.key,
-                  label: catName(g.key),
-                  paise: g.paise,
-                  detail: `${g.count} transaction${g.count === 1 ? "" : "s"}`,
-                  href: `/transactions?${monthQuery}&category=${g.key}`,
-                }))}
-              />
-            </Card>
+          <Card title="By category" action={<TextLink href="/reports?r=category">Report</TextLink>}>
+            <PieChart
+              caption={`Net spending by category in ${formatMonth(month)}`}
+              items={data.byCategory.map((g) => ({
+                key: g.key,
+                label: catName(g.key),
+                paise: g.paise,
+                detail: `${g.count} transaction${g.count === 1 ? "" : "s"}`,
+                href: `/transactions?${monthQuery}&category=${g.key}`,
+              }))}
+            />
+          </Card>
 
+          <div className="grid gap-4 lg:grid-cols-2">
             <Card title={reason ? "Budgets (all spending)" : "Budgets"} action={<TextLink href="/budgets">Manage</TextLink>}>
               {data.budgets.categories.length === 0 && !overall ? (
                 <EmptyState>

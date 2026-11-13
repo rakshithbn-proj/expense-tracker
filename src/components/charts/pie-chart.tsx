@@ -62,24 +62,24 @@ export function PieChart({ items, caption, emptyText = "Nothing to show yet." }:
   });
 
   return (
-    <figure className="flex flex-col items-center gap-4 sm:flex-row sm:items-start">
+    <figure className="flex flex-col items-center gap-6 sm:flex-row sm:items-center">
       {total > 0 && (
-        <div className="relative shrink-0" style={{ width: SIZE, height: SIZE }}>
-          <svg viewBox={`0 0 ${SIZE} ${SIZE}`} width={SIZE} height={SIZE} role="img" aria-label={caption} className="block">
+        <div className="relative aspect-square w-full max-w-[300px] shrink-0 sm:w-[300px]">
+          <svg viewBox={`0 0 ${SIZE} ${SIZE}`} role="img" aria-label={caption} className="block h-full w-full">
             {geometry.map((g) => (
               <g key={g.key} tabIndex={0} role="graphics-symbol" aria-label={`${g.label}: ${formatInr(g.paise)}, ${share(g.paise)}%`} className="outline-none" {...hoverProps(g.key)}>
                 {g.to - g.from >= 0.9999 ? (
                   <circle cx={C} cy={C} r={(R + INNER) / 2} fill="none" stroke={`var(--${g.color})`} strokeWidth={R - INNER} opacity={dim(g.key)} />
                 ) : (
-                  <path d={arc(g.from, g.to)} fill={`var(--${g.color})`} stroke="var(--surface)" strokeWidth={2} strokeLinejoin="round" opacity={dim(g.key)} />
+                  <path d={arc(g.from, g.to)} fill={`var(--${g.color})`} stroke="var(--surface)" strokeWidth={2} strokeLinejoin="round" vectorEffect="non-scaling-stroke" opacity={dim(g.key)} />
                 )}
               </g>
             ))}
           </svg>
-          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center px-12 text-center" aria-hidden>
-            <span className="max-w-full truncate text-xs text-muted">{active ? active.label : "Total"}</span>
-            <span className="text-sm font-semibold tabular-nums">{formatInrWhole(active ? active.paise : total)}</span>
-            {active && <span className="text-xs text-muted tabular-nums">{share(active.paise)}%</span>}
+          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center px-[22%] text-center" aria-hidden>
+            <span className="max-w-full truncate text-sm text-muted">{active ? active.label : "Total"}</span>
+            <span className="text-xl font-semibold tabular-nums">{formatInrWhole(active ? active.paise : total)}</span>
+            {active && <span className="text-sm text-muted tabular-nums">{share(active.paise)}%</span>}
           </div>
         </div>
       )}
