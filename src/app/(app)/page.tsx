@@ -26,7 +26,8 @@ export const metadata = { title: "Overview · Expenses" };
 const SPENDING_DEFINITION =
   "Net spending = purchases and fees (completed and pending) minus refunds. Own-account transfers, card bill payments, income, investments, cash withdrawals, failed and reversed payments are not spending.";
 
-// Net spending defaults to this "why" when the user has used it; "all" means every payment.
+// The whole page shows one "why"; it defaults to this one when the user has used it.
+// "all" means every payment.
 const DEFAULT_REASON = "shared rental expense";
 const ALL_REASONS = "all";
 
@@ -54,13 +55,14 @@ export default async function OverviewPage({ searchParams }: PageProps<"/">) {
   const failing = capabilities.filter((c) => c.status === "Temporarily failing");
   const { summary } = data;
   const catName = (id: string) => (id === "uncategorized" ? "Uncategorized" : (names.categoryName.get(id) ?? "Unknown category"));
-  const monthQuery = `from=${month}-01&to=${month}-${String(daysInMonth(month)).padStart(2, "0")}`;
+  // Links into the transactions list carry the chosen "why" so the list matches what's shown here.
+  const whyQuery = reason ? `&why=${encodeURIComponent(reason)}` : "";
+  const monthQuery = `from=${month}-01&to=${month}-${String(daysInMonth(month)).padStart(2, "0")}${whyQuery}`;
 
-  const net = data.netSpending;
-  const vsPrevious = net.summary.netSpendPaise - net.previousSameDaysPaise;
+  const vsPrevious = summary.netSpendPaise - data.previousSameDaysPaise;
   const prevLabel = formatMonthShort(addMonths(month, -1));
   const comparison =
-    net.previousSameDaysPaise === 0 && net.summary.netSpendPaise === 0
+    data.previousSameDaysPaise === 0 && summary.netSpendPaise === 0
       ? null
       : `${vsPrevious >= 0 ? "▲" : "▼"} ${formatInr(Math.abs(vsPrevious))} ${vsPrevious >= 0 ? "more" : "less"} than days 1–${data.throughDay} of ${prevLabel}`;
 
@@ -70,6 +72,7 @@ export default async function OverviewPage({ searchParams }: PageProps<"/">) {
   return (
     <div className="flex flex-col gap-4">
       <PageHeader title="Overview">
+        <ReasonPicker month={month} value={why} reasons={reason && !reasons.includes(reason) ? [...reasons, reason] : reasons} />
         <MonthNav month={month} currentMonth={currentMonth} basePath="/" keep={requestedWhy ? { why: requestedWhy } : {}} />
       </PageHeader>
       <SampleBanner count={data.sampleCount} />
@@ -87,43 +90,42 @@ export default async function OverviewPage({ searchParams }: PageProps<"/">) {
       )}
 
       <section className="rounded-2xl border border-border bg-surface p-5" aria-labelledby="net-spend-label">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div id="net-spend-label" className="text-sm text-muted">
-            Net spending{reason ? ` · ${reason}` : ""} · {formatMonth(month)}
-            {data.isCurrent ? " so far" : ""}
-          </div>
-          <ReasonPicker month={month} value={why} reasons={reason && !reasons.includes(reason) ? [...reasons, reason] : reasons} />
+        <div id="net-spend-label" className="text-sm text-muted">
+          Net spending{reason ? ` · ${reason}` : ""} · {formatMonth(month)}
+          {data.isCurrent ? " so far" : ""}
         </div>
         <div className="mt-1 text-5xl font-semibold tracking-tight" data-testid="net-spending">
-          {formatInrWhole(net.summary.netSpendPaise)}
+          {formatInrWhole(summary.netSpendPaise)}
         </div>
         <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted">
-          <span>Spent {formatInr(net.summary.grossSpendPaise)}</span>
-          <span>Refunds −{formatInr(net.summary.refundsPaise)}</span>
-          {net.summary.pendingSpendPaise > 0 && <span>Includes {formatInr(net.summary.pendingSpendPaise)} pending</span>}
+          <span>Spent {formatInr(summary.grossSpendPaise)}</span>
+          <span>Refunds −{formatInr(summary.refundsPaise)}</span>
+          {summary.pendingSpendPaise > 0 && <span>Includes {formatInr(summary.pendingSpendPaise)} pending</span>}
         </div>
         {comparison && <div className="mt-2 text-sm">{comparison}</div>}
         {reason && (
           <div className="mt-2 text-sm">
-            <TextLink href={`/transactions?${monthQuery}&why=${encodeURIComponent(reason)}`}>See these payments</TextLink>
+            <TextLink href={`/transactions?${monthQuery}`}>See these payments</TextLink>
           </div>
         )}
         <Definition>
           {SPENDING_DEFINITION}
-          {reason ? ` Only payments explained with “${reason}” count here (a refund counts under its purchase's reason); the rest of this page covers all spending.` : ""}
+          {reason
+            ? ` This page shows only payments explained with “${reason}” (a refund counts under its purchase's reason). Budgets always cover all spending.`
+            : ""}
         </Definition>
       </section>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <StatTile
-          label="Overall budget"
+          label={reason ? "Overall budget (all spending)" : "Overall budget"}
           value={overall ? (overall.remainingPaise >= 0 ? `${formatInrWhole(overall.remainingPaise)} left` : `${formatInrWhole(-overall.remainingPaise)} over`) : "Not set"}
           detail={overall ? `${overall.percentUsed}% of ${formatInrWhole(overall.limitPaise)} used` : <TextLink href="/budgets">Set a budget</TextLink>}
         />
         <StatTile
           label="Needs review"
           value={String(data.needsReviewCount)}
-          detail={data.needsReviewCount > 0 ? <TextLink href="/transactions?review=1">Review now</TextLink> : "All clear"}
+          detail={data.needsReviewCount > 0 ? <TextLink href={`/transactions?review=1${whyQuery}`}>Review now</TextLink> : "All clear"}
         />
         <StatTile label="Income" value={formatInrWhole(summary.incomePaise)} detail="Not counted as spending" />
         <StatTile
@@ -136,13 +138,20 @@ export default async function OverviewPage({ searchParams }: PageProps<"/">) {
       {!hasAny ? (
         <Card>
           <EmptyState>
-            No transactions in {formatMonth(month)} yet. Automatic capture arrives in Milestones 4–6. Until then you can{" "}
-            <TextLink href="/transactions/new">add one manually</TextLink>.
+            {reason ? (
+              <>
+                No payments explained with “{reason}” in {formatMonth(month)}. <TextLink href={`/?month=${month}&why=all`}>Show all spending</TextLink>.
+              </>
+            ) : (
+              <>
+                No transactions in {formatMonth(month)} yet. You can <TextLink href="/transactions/new">add one manually</TextLink>.
+              </>
+            )}
           </EmptyState>
         </Card>
       ) : (
         <>
-          <Card title={reason ? "All spending through the month" : "Spending through the month"}>
+          <Card title="Spending through the month">
             <LineCompareChart
               caption={`Cumulative net spending by day: ${formatMonth(month)} compared with ${formatMonth(addMonths(month, -1))}`}
               xLabels={Array.from({ length: Math.max(data.cumulative.previous.length, data.cumulative.current.length) }, (_, i) => `Day ${i + 1}`)}
@@ -167,7 +176,7 @@ export default async function OverviewPage({ searchParams }: PageProps<"/">) {
               />
             </Card>
 
-            <Card title="Budgets" action={<TextLink href="/budgets">Manage</TextLink>}>
+            <Card title={reason ? "Budgets (all spending)" : "Budgets"} action={<TextLink href="/budgets">Manage</TextLink>}>
               {data.budgets.categories.length === 0 && !overall ? (
                 <EmptyState>
                   No budgets yet. <TextLink href="/budgets">Set monthly limits</TextLink> for overall spending or a category.

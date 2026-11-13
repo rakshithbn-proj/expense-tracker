@@ -109,7 +109,7 @@ describe("dashboard and reports agree with the database", () => {
     expect(shopping?.paise).toBe(1899_00 - 1899_00 - 1000_00);
   });
 
-  it("narrows net spending to one 'why'; a linked refund counts under its purchase's why", async () => {
+  it("narrows the whole overview to one 'why'; a linked refund counts under its purchase's why", async () => {
     const setWhy = (merchant: string, reason: string) =>
       testDb().execute(sql`update transactions set reason = ${reason} where user_id = ${userId} and merchant_name = ${merchant} and direction = 'debit'`);
     await setWhy("SWIGGY", "Shared Rental Expense");
@@ -124,13 +124,25 @@ describe("dashboard and reports agree with the database", () => {
     if (refund.parent !== purchase.id) await linkRefund(testDb(), userId, refund.id, purchase.id);
 
     const shared = await overview(testDb(), userId, "2026-10", "2026-10-22", "Shared Rental Expense");
-    expect(shared.netSpending.summary.netSpendPaise).toBe(412_00 + 1899_00 - 1899_00);
-    expect(shared.netSpending.summary.refundsPaise).toBe(1899_00);
-    // Everything else on the page stays on all spending.
-    expect(shared.summary.netSpendPaise).toBe(await sqlNetSpending("2026-10"));
+    const net = 412_00 + 1899_00 - 1899_00;
+    const sum = (gs: { paise: number }[]) => gs.reduce((s, g) => s + g.paise, 0);
+    expect(shared.summary.netSpendPaise).toBe(net);
+    expect(shared.summary.refundsPaise).toBe(1899_00);
+    expect(shared.summary.incomePaise).toBe(0);
+    expect(sum(shared.byCategory)).toBe(net);
+    expect(sum(shared.byPaymentMethod)).toBe(net);
+    expect(shared.cumulative.current.at(-1)).toBe(net);
+    expect(shared.topMerchants.map((g) => g.key).sort()).toEqual(["AMAZON", "SWIGGY"]);
+    expect(shared.recent.map((t) => t.merchantName).sort()).toEqual(["AMAZON", "AMAZON", "SWIGGY"]);
+    expect(shared.refundsAndReversals.map((t) => t.merchantName)).toEqual(["AMAZON"]);
+    expect(shared.captureMethods).toEqual({ manual: 3 });
+
+    const home = await overview(testDb(), userId, "2026-10", "2026-10-22", "Home Expense");
+    expect(home.summary.netSpendPaise).toBe(2340_00);
+    expect(home.refundsAndReversals).toEqual([]);
 
     const all = await overview(testDb(), userId, "2026-10", "2026-10-22");
-    expect(all.netSpending.summary).toEqual(all.summary);
+    expect(all.summary.netSpendPaise).toBe(await sqlNetSpending("2026-10"));
   });
 
   it("monthly report rows match the per-month summaries", async () => {

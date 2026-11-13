@@ -5,7 +5,7 @@ import { inputClass } from "@/components/ui";
 
 const ALL_REASONS = "all"; // same value the overview page reads
 
-// Chooses which "why" the overview's net spending counts; keeps the month in view.
+// Chooses which "why" the whole overview shows; keeps the month in view.
 export function ReasonPicker({ month, value, reasons }: { month: string; value: string; reasons: string[] }) {
   const router = useRouter();
   return (

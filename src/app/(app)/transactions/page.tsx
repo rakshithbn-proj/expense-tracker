@@ -8,7 +8,8 @@ import { requireUser } from "@/server/auth/dal";
 import { db } from "@/server/db/client";
 import { lookups } from "@/server/finance/reports-service";
 import { listReasons, listTransactions, totalsForFilter, type TransactionDto } from "@/server/finance/transactions-service";
-import { activeFilterCount, NO_REASON, toFilterParams, toServiceFilter, withParams } from "./filters";
+import { CheckboxDropdown } from "@/components/checkbox-dropdown";
+import { activeFilterCount, NO_REASON, toFilterParams, toServiceFilter, WHY_SEPARATOR, withParams } from "./filters";
 
 export const metadata = { title: "Transactions · Expenses" };
 
@@ -25,23 +26,6 @@ function Select({ name, label, value, options }: { name: string; label: string; 
         ))}
       </select>
     </label>
-  );
-}
-
-function Checkboxes({ name, label, values, options }: { name: string; label: string; values: string[]; options: [string, string][] }) {
-  return (
-    <fieldset className="col-span-2 flex flex-col gap-1 text-xs font-medium text-muted">
-      <legend className="mb-1">{label}</legend>
-      {options.length === 0 && <span>None yet</span>}
-      <div className="flex flex-col gap-1.5 sm:grid sm:grid-cols-2">
-        {options.map(([v, l]) => (
-          <label key={v} className="flex items-center gap-2 text-sm font-normal text-foreground">
-            <input type="checkbox" name={name} value={v} defaultChecked={values.includes(v)} className="h-4 w-4 shrink-0" />
-            <span className="truncate">{l}</span>
-          </label>
-        ))}
-      </div>
-    </fieldset>
   );
 }
 
@@ -122,8 +106,8 @@ export default async function TransactionsPage({ searchParams }: PageProps<"/tra
           />
           <Select name="method" label="Payment method" value={params.method} options={PAYMENT_METHODS.map((m): [string, string] => [m, METHOD_LABELS[m]])} />
           <Field name="app" label="Payment app (when known)" value={params.app} placeholder="e.g. PhonePe" />
-          <Select name="why" label="Why" value={params.why} options={[[NO_REASON, "Not given"], ...reasons.map((r): [string, string] => [r, r])]} />
-          <Checkboxes name="account" label="Account or card" values={params.account?.split(",") ?? []} options={[...names.accountName.entries()]} />
+          <CheckboxDropdown name="why" label="Why" values={params.why?.split(WHY_SEPARATOR) ?? []} options={[...reasons.map((r): [string, string] => [r, r]), [NO_REASON, "Not given"]]} />
+          <CheckboxDropdown name="account" label="Account or card" values={params.account?.split(",") ?? []} options={[...names.accountName.entries()]} />
           <Field name="min" label="Min amount (₹)" type="number" value={params.min} />
           <Field name="max" label="Max amount (₹)" type="number" value={params.max} />
           <Select name="status" label="Status" value={params.status} options={TRANSACTION_STATUSES.map((s): [string, string] => [s, STATUS_LABELS[s]])} />

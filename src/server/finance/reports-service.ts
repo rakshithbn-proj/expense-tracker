@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, desc, eq, gte, inArray, isNull, lt, min, or } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, lt, min, or, sql, type SQL } from "drizzle-orm";
 import { addMonths, istDate, monthRange } from "@/lib/dates";
 import { decimalToPaise } from "@/lib/money";
 import { categories, financialAccounts, transactions } from "@/server/db/schema";
@@ -122,63 +122,55 @@ export async function lookups(db: Executor, userId: string) {
   };
 }
 
-// Everything the overview page shows for one month. `reason` narrows only the net spending
-// figure (and its comparison) to one "why"; null means all spending.
+// A transaction's "why", as loadAnalyzed() resolves it: a linked refund or reversal takes its
+// original purchase's reason.
+const effectiveReason = sql`coalesce(nullif((select p.reason from transactions p where p.id = ${transactions.parentTransactionId}), ''), nullif(${transactions.reason}, ''))`;
+
+// Everything the overview page shows for one month. `reason` narrows the whole page to the
+// payments explained with that "why" (null means everything); only budgets stay on all
+// spending, because their limits are for total spending.
 export async function overview(db: Executor, userId: string, month: string, today = istDate(new Date()), reason: string | null = null) {
   const { start, end } = monthRange(month);
   const historyStart = `${addMonths(month, -3)}-01`;
   const isCurrent = today.startsWith(month);
   const throughDay = isCurrent ? Number(today.slice(8, 10)) : daysInMonth(month);
   const previousMonth = addMonths(month, -1);
+  const mine = (...extra: SQL[]) =>
+    and(eq(transactions.userId, userId), isNull(transactions.voidedAt), ...(reason === null ? [] : [sql`${effectiveReason} = ${reason}`]), ...extra);
+  const inMonth = [gte(transactions.transactionDate, start), lt(transactions.transactionDate, end)];
 
-  const [history, earliest, budgets, recentRows, reviewRows] = await Promise.all([
+  const [loaded, earliest, budgets, recentRows, reviewRows, refundsAndReversals] = await Promise.all([
     loadAnalyzed(db, userId, { start: historyStart, endExclusive: end }),
     earliestTransactionDate(db, userId),
     budgetReport(db, userId, month),
     db
       .select()
       .from(transactions)
-      .where(and(eq(transactions.userId, userId), isNull(transactions.voidedAt), gte(transactions.transactionDate, start), lt(transactions.transactionDate, end)))
+      .where(mine(...inMonth))
       .orderBy(desc(transactions.transactionDate), desc(transactions.createdAt))
       .limit(8),
+    db.select({ id: transactions.id }).from(transactions).where(mine(eq(transactions.needsReview, true))),
     db
-      .select({ id: transactions.id })
+      .select()
       .from(transactions)
-      .where(and(eq(transactions.userId, userId), isNull(transactions.voidedAt), eq(transactions.needsReview, true))),
+      .where(mine(...inMonth, or(eq(transactions.transactionType, "refund"), eq(transactions.transactionType, "reversal"))!))
+      .orderBy(desc(transactions.transactionDate))
+      .limit(5),
   ]);
 
+  const history = reason === null ? loaded : { items: loaded.items.filter((t) => t.reason === reason), parents: loaded.parents };
   const current = history.items.filter((t) => t.date >= start && t.date < end);
   const [thisSummary, prevSummary] = summarizeMonths(history, [month, previousMonth]);
-  const forReason = reason === null ? history : { items: history.items.filter((t) => t.reason === reason), parents: history.parents };
-  const [reasonSummary] = reason === null ? [thisSummary] : summarizeMonths(forReason, [month]);
-
-  const refundsAndReversals = await db
-    .select()
-    .from(transactions)
-    .where(
-      and(
-        eq(transactions.userId, userId),
-        isNull(transactions.voidedAt),
-        gte(transactions.transactionDate, start),
-        lt(transactions.transactionDate, end),
-        or(eq(transactions.transactionType, "refund"), eq(transactions.transactionType, "reversal")),
-      ),
-    )
-    .orderBy(desc(transactions.transactionDate))
-    .limit(5);
 
   return {
     month,
+    reason,
     isCurrent,
     throughDay,
     summary: thisSummary,
     previous: prevSummary,
-    netSpending: {
-      reason,
-      summary: reasonSummary,
-      // Same days of the previous month, so a part-month is compared fairly.
-      previousSameDaysPaise: cumulativeByDay(forReason.items, previousMonth)[Math.min(throughDay, daysInMonth(previousMonth)) - 1] ?? 0,
-    },
+    // Same days of the previous month, so a part-month is compared fairly.
+    previousSameDaysPaise: cumulativeByDay(history.items, previousMonth)[Math.min(throughDay, daysInMonth(previousMonth)) - 1] ?? 0,
     cumulative: {
       current: cumulativeByDay(current, month).slice(0, throughDay),
       previous: cumulativeByDay(history.items, previousMonth),

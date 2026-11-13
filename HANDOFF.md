@@ -72,9 +72,11 @@ pre-existing failure since ~Nov 2026: `gmail-ingestion.test.ts` "masked excerpt 
     Nagabhushan, Home Expense, Mruthula Expense. POST `…/api/ingest/explain?format=text`.
     The reason is free text on the server; **Transactions → Filters → Why** lists the distinct
     reasons used. Migration `0007` renamed stored "Nagabhus" answers to "Nagabhushan" (the
-    Shortcut's list had the short form). The Overview's net spending is narrowed to one "why"
-    (dropdown; defaults to Shared Rental Expense when that reason exists, `?why=all` for
-    everything); the rest of the Overview stays on all spending. The label shows amount · payee · method (UPI/Card…) · account · time.
+    Shortcut's list had the short form). The **whole Overview** is narrowed to one "why"
+    (dropdown in the header; defaults to Shared Rental Expense when that reason exists,
+    `?why=all` for everything); only Budgets stay on all spending. On Transactions, Why and
+    Account are checkbox dropdowns (several at once; several whys are joined with a line break
+    in the URL because a reason may contain a comma). The label shows amount · payee · method (UPI/Card…) · account · time.
     Guide: `docs/setup/explain-shortcut.md`.
 - **PC network (temporary until the move):** the PC was given a manual Wi-Fi IP. It was
   mistyped once (`19.168.0.2`, mask /32), which made every Shortcut time out. Correct is
