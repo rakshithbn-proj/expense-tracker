@@ -8,6 +8,8 @@ x-app-env: &app-env
   GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
   GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
   TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY:-}
+  # Your name(s) as banks print them; payments to or from these are own-account transfers.
+  OWN_ACCOUNT_NAMES: ${OWN_ACCOUNT_NAMES:-}
 
 services:
   db:

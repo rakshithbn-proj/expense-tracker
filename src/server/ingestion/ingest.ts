@@ -7,6 +7,7 @@ import type { Database } from "@/server/db/client";
 import { financialAccounts, transactions } from "@/server/db/schema";
 import { createAccount } from "@/server/finance/accounts-service";
 import { createTransaction } from "@/server/finance/transactions-service";
+import { nameKey, ownAccountNames } from "@/server/env";
 import type { ParsedAlert } from "./email/types";
 
 // What any capture source has established about one payment. Source-agnostic: the Gmail adapter
@@ -45,12 +46,20 @@ export async function resolveAccount(
   return { id: account.id, created: true };
 }
 
+// Money sent to, or received from, the user's own name is an own-account transfer, not spending
+// or income. createTransaction() then pairs it with the other account's side, or flags it.
+export function asOwnTransfer<E extends Pick<CapturedEvent, "merchant" | "transactionType">>(e: E, ownNames: string[]): E {
+  if (!e.merchant || (e.transactionType !== "purchase" && e.transactionType !== "income")) return e;
+  return ownNames.includes(nameKey(e.merchant)) ? { ...e, transactionType: "internal_transfer" } : e;
+}
+
 export async function ingestEvent(
   db: Database,
   userId: string,
   e: CapturedEvent,
   opts: { captureMethod: CaptureMethod; deduplicationKey: string },
 ): Promise<IngestResult> {
+  e = asOwnTransfer(e, ownAccountNames());
   const account = await resolveAccount(db, userId, e);
 
   // The same payment reported again with the same reference (e.g. a duplicate alert).

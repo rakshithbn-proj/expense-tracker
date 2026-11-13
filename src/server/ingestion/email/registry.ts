@@ -6,7 +6,7 @@ import { rblParser } from "./parsers/rbl";
 import type { AlertEmail, AlertParser, ParseResult } from "./types";
 
 // Parsers built from real alert samples (redacted fixtures in tests/fixtures/email).
-// SBI and AMEX are out of scope by the user's choice; ICICI bank-account alerts are pending samples.
+// AMEX is out of scope by the user's choice (SBI only via SMS, see sms/parsers.ts); ICICI bank-account alerts are pending samples.
 export const PARSERS: AlertParser[] = [hdfcParser, hsbcParser, iciciParser, rblParser];
 
 export const KNOWN_SENDERS = new Set(PARSERS.flatMap((p) => p.senders));

@@ -59,7 +59,14 @@ pre-existing failure since ~Nov 2026: `gmail-ingestion.test.ts` "masked excerpt 
 - **Sender verification:** an alert becomes a transaction only if Gmail's topmost
   `Authentication-Results` shows a DKIM (or ARC) pass for the bank's own domain
   (`src/server/ingestion/email/authentication.ts`). Senders use the new `.bank.in` domains.
-- **Banks in scope:** HDFC, HSBC, ICICI, RBL. **SBI and AMEX are excluded at the user's request.**
+- **Banks in scope:** HDFC, HSBC, ICICI, RBL; **SBI by SMS only** (account ••9872, added at the
+  user's request 2026-11-13; parser `sbi.sms_acct_transfer_debit`, debits only until a credit SMS
+  sample arrives). **AMEX is excluded at the user's request.** SMS formats so far: ICICI UPI
+  debit, ICICI "Acc … debited … Info …" (NEFT etc., no payee), SBI "Transferred to". ICICI
+  "will be debited … Autopay" notices are deliberately not payments.
+- **Own-account transfers by name:** `OWN_ACCOUNT_NAMES` (server `.env`, comma-separated, never in
+  the repo) lists the user's name as banks print it. A captured payment to/from that name becomes
+  `internal_transfer` (paired with the other side, or flagged for review), not spending.
 - **User requirement: ignore OTP emails and SMS completely** (`isOtpMessage` in `parse-helpers.ts`).
 - **Google Sheets:** connected to an account the user chose in Settings (not vikkirak@gmail.com).
 - **iPhone Shortcuts** (all use one device key, header `Authorization: Bearer etk_…`), all pointing

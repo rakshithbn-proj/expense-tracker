@@ -47,6 +47,19 @@ export function sheetsConfig(): SheetsConfig | null {
   };
 }
 
+// Names compared on letters only, without a title, so "Mr. A B KUMAR." and "AB KUMAR" match.
+export const nameKey = (s: string) =>
+  s
+    .toUpperCase()
+    .replace(/^\s*(MR|MRS|MS|DR)(\.\s*|\s+)/, "")
+    .replace(/[^A-Z]/g, "");
+
+// OWN_ACCOUNT_NAMES: the user's own name(s) as banks print them, comma-separated. Optional and
+// free text, so it's read directly rather than through env() (which also demands DATABASE_URL).
+export function ownAccountNames(): string[] {
+  return (process.env.OWN_ACCOUNT_NAMES ?? "").split(",").map(nameKey).filter(Boolean);
+}
+
 export type Env = z.infer<typeof envSchema>;
 
 let cached: Env | undefined;
