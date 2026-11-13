@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
-import { deviceKeys, transactionSources, transactions, users } from "@/server/db/schema";
+import { deviceKeys, financialAccounts, transactionSources, transactions, users } from "@/server/db/schema";
 import { captureCapabilities } from "@/server/capture/capabilities";
 import { DomainError } from "@/server/errors";
 import { processQueue } from "@/server/ingestion/gmail/service";
@@ -101,6 +101,28 @@ describe("Quick Add", () => {
     const body = { kind: "quick_add", amount: 99, id: "2026-10-24T11:30:05+05:30" };
     await submitFromDevice(testDb(), await device(), body, now);
     expect((await submitFromDevice(testDb(), await device(), body, new Date(now.getTime() + 3_600_000))).status).toBe("duplicate");
+  });
+
+  it("files the entry under the card picked by its last digits", async () => {
+    const [hdfc] = await testDb().insert(financialAccounts).values({ userId, institutionName: "HDFC Bank", accountName: "Credit Card", accountType: "credit_card", maskedIdentifier: "1234" }).returning();
+    await testDb().insert(financialAccounts).values({ userId, institutionName: "HDFC Bank", accountName: "Credit Card", accountType: "credit_card", maskedIdentifier: "5678" });
+    const result = await submitFromDevice(testDb(), await device(), { kind: "quick_add", amount: 377, card: "HDFC Diners 1234" }, now);
+    expect(result.status).toBe("captured");
+    expect((await txs())[0].financialAccountId).toBe(hdfc.id);
+  });
+
+  it("refuses a card the app doesn't know, records nothing, and accepts the fix", async () => {
+    const body = { kind: "quick_add", amount: 50, card: "9999", id: "2026-10-24T11:30:05+05:30" };
+    await expect(submitFromDevice(testDb(), await device(), body, now)).rejects.toThrow(/No card or account ending 9999/);
+    await expect(submitFromDevice(testDb(), await device(), { ...body, card: "Cash" }, now)).rejects.toThrow(/last digits/);
+    expect(await sources()).toHaveLength(0);
+    await testDb().insert(financialAccounts).values({ userId, institutionName: "HDFC Bank", accountName: "Credit Card", accountType: "credit_card", maskedIdentifier: "9999" });
+    expect((await submitFromDevice(testDb(), await device(), body, now)).status).toBe("captured");
+  });
+
+  it("leaves the account unknown when no card is sent", async () => {
+    await submitFromDevice(testDb(), await device(), { kind: "quick_add", amount: 20, card: "" }, now);
+    expect((await txs())[0].financialAccountId).toBeNull();
   });
 
   it("rejects bad input with a readable reason and records nothing", async () => {

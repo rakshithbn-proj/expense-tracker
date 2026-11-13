@@ -44,6 +44,10 @@ Shortcuts app → **+** → name it **Log Expense**. Add these actions in order:
 2. **Ask for Input**: type *Text*, prompt `Paid to`.
 3. **Choose from Menu** with prompt `Paid with`, items: `PhonePe`, `Google Pay`, `Paytm`,
    `Card`, `Cash`. (Optional; leave it out if you don't want the question.)
+3b. **List** with one item per card or account, each ending in its last digits as the app shows
+   them (e.g. `HDFC Diners 1234`, `HDFC RuPay 5678`, `ICICI 901`), then **Choose from List**
+   with prompt `Card`. (Optional. The card must already exist in the app; otherwise the reply
+   says so and nothing is saved.)
 4. **Get Contents of URL**:
    - URL: **ENDPOINT**
    - Method: **POST**
@@ -53,6 +57,7 @@ Shortcuts app → **+** → name it **Log Expense**. Add these actions in order:
      - `amount` (Number) = *Provided Input* from step 1
      - `merchant` (Text) = *Provided Input* from step 2
      - `paymentApp` (Text) = *Menu Result* (only if you kept step 3)
+     - `card` (Text) = *Chosen Item* (only if you kept step 3b)
      - `id` (Text) = *Current Date*. This stops a double tap creating two entries.
 5. **Show Notification**: tap the text and choose the variable *Contents of URL*.
 

@@ -6,7 +6,7 @@ import { isValidDate, istDate } from "@/lib/dates";
 import { PAYMENT_METHODS } from "@/lib/finance-types";
 import { MoneyParseError, parseAmountToPaise } from "@/lib/money";
 import type { Database } from "@/server/db/client";
-import { transactionSources } from "@/server/db/schema";
+import { financialAccounts, transactionSources } from "@/server/db/schema";
 import { DomainError } from "@/server/errors";
 import { createTransaction } from "@/server/finance/transactions-service";
 import { isOtpMessage, looksLikeTransaction } from "../email/parse-helpers";
@@ -44,6 +44,8 @@ export const submissionSchema = z.discriminatedUnion("kind", [
     paymentMethod: z.enum(PAYMENT_METHODS).default("unknown"),
     // Stated by the user, so it's evidence of which app was used.
     paymentApp: z.string().trim().max(60).optional(),
+    // The card or account used, ending in its last digits ("1234", "HDFC Diners 1234").
+    card: z.string().trim().max(60).optional(),
     note: z.string().trim().max(500).optional(),
     id,
   }),
@@ -66,7 +68,7 @@ function submissionKey(s: Submission, now: Date): string {
   if (s.id) return `${s.kind}:id:${s.id}`;
   const content =
     s.kind === "quick_add"
-      ? [s.amount, s.merchant ?? "", s.date ?? "", s.direction, Math.floor(now.getTime() / 60_000)].join("|")
+      ? [s.amount, s.merchant ?? "", s.date ?? "", s.direction, s.card ?? "", Math.floor(now.getTime() / 60_000)].join("|")
       : [s.text.replace(/\s+/g, " ").trim(), s.kind === "sms" ? (s.sender ?? "") : ""].join("|");
   return `${s.kind}:${createHash("sha256").update(content).digest("hex")}`;
 }
@@ -84,8 +86,24 @@ function resultFor(row: Pick<SourceRow, "parseStatus" | "transactionId" | "lastE
   }
 }
 
+// Finds the one active account whose number ends in the digits the user picked. Checked before
+// anything is stored, so a wrong card is refused and the same Quick Add can simply be sent again.
+async function quickAddAccount(db: Database, userId: string, card: string): Promise<string> {
+  const digits = /(\d{2,6})\D*$/.exec(card)?.[1];
+  if (!digits) throw new DomainError("card_digits", `Card "${card}" should end with its last digits, e.g. HDFC 1234`);
+  const accounts = await db
+    .select({ id: financialAccounts.id, masked: financialAccounts.maskedIdentifier })
+    .from(financialAccounts)
+    .where(and(eq(financialAccounts.userId, userId), eq(financialAccounts.isActive, true)));
+  const matches = accounts.filter((a) => a.masked && (a.masked.endsWith(digits) || digits.endsWith(a.masked)));
+  if (matches.length === 0) throw new DomainError("card_unknown", `No card or account ending ${digits} in the app. Add it in Settings first; nothing was saved.`);
+  if (matches.length > 1) throw new DomainError("card_ambiguous", `More than one account ends in ${digits}; send more digits. Nothing was saved.`);
+  return matches[0].id;
+}
+
 export async function submitFromDevice(db: Database, device: AuthenticatedDevice, raw: unknown, now = new Date()): Promise<SubmitResult> {
   const submission = submissionSchema.parse(raw);
+  const accountId = submission.kind === "quick_add" && submission.card ? await quickAddAccount(db, device.userId, submission.card) : null;
   const sourceMessageId = submissionKey(submission, now);
   const payload = submission.kind === "quick_add" ? { kind: "quick_add" } : { kind: submission.kind, sender: submission.kind === "sms" ? submission.sender : undefined, text: submission.text };
 
@@ -101,7 +119,7 @@ export async function submitFromDevice(db: Database, device: AuthenticatedDevice
   if (!inserted) return { ...resultFor(row), status: "duplicate", message: "Already received; nothing new was saved." };
 
   try {
-    await processShortcutRow(db, row, submission, now);
+    await processShortcutRow(db, row, submission, now, accountId);
   } catch (err) {
     if (err instanceof DomainError) throw err;
     // Kept in the queue; the worker retries it.
@@ -114,7 +132,7 @@ export async function submitFromDevice(db: Database, device: AuthenticatedDevice
 
 // Turns one stored submission into a transaction or a review item. Also used by the worker
 // for submissions whose first attempt failed.
-export async function processShortcutRow(db: Database, row: SourceRow, given?: Submission, now = new Date()) {
+export async function processShortcutRow(db: Database, row: SourceRow, given?: Submission, now = new Date(), accountId: string | null = null) {
   const submission = given ?? storedSubmission(row);
   if (!submission) {
     // Unrecognised text is kept masked for 7 days only; after that there's nothing to replay.
@@ -138,6 +156,7 @@ export async function processShortcutRow(db: Database, row: SourceRow, given?: S
         merchantName: submission.merchant ?? null,
         paymentMethod: submission.paymentMethod,
         paymentApp: submission.paymentApp ?? null,
+        financialAccountId: accountId,
         notes: submission.note ?? null,
         deduplicationKey: `shortcut:${row.sourceMessageId}`,
       },
