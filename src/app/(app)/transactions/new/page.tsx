@@ -25,7 +25,7 @@ export default async function NewTransactionPage() {
       <PageHeader title="Add a transaction manually" />
       <Card>
         <ActionForm action={createManualAction} submitLabel="Add transaction" pendingLabel="Adding…" buttonClassName={buttonClass} testId="new-transaction-form">
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <label className={label}>
               Amount (₹)
               <input name="amount" inputMode="decimal" required className={inputClass} placeholder="e.g. 450.00" />

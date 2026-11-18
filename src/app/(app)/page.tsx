@@ -186,7 +186,7 @@ export default async function OverviewPage({ searchParams }: PageProps<"/">) {
             />
           </Card>
 
-          <div className="grid gap-4 lg:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <Card title={reason ? `Budgets · ${reason}` : "Budgets"} action={<TextLink href={budgetsHref}>Manage</TextLink>}>
               {data.budgets.categories.length === 0 && !overall ? (
                 <EmptyState>
@@ -227,7 +227,7 @@ export default async function OverviewPage({ searchParams }: PageProps<"/">) {
             </Card>
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <Card title="Recent transactions" action={<TextLink href={`/transactions?${monthQuery}`}>See all</TextLink>}>
               <ul className="-mx-2">
                 {data.recent.map((t) => (

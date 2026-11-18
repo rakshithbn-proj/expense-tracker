@@ -84,9 +84,10 @@ test("manual entry, review queue, filters and correction through the UI", async 
   await expect(page.getByRole("link", { name: "Groceries", exact: true })).toBeVisible();
 });
 
-test("reports, budgets and settings pages render without overflow", async ({ page }) => {
+test("overview, transactions, reports, budgets and settings pages render without overflow", async ({ page }) => {
   await signIn(page);
-  for (const path of ["/reports?r=category", "/reports?r=monthly", "/reports?r=cashflow", "/reports?r=coverage", "/budgets", "/settings"]) {
+  const reports = ["category", "monthly", "merchant", "account", "method", "trends", "recurring", "budgets", "cashflow", "refunds", "coverage", "insights"];
+  for (const path of ["/", "/transactions", ...reports.map((r) => `/reports?r=${r}`), "/budgets", "/settings"]) {
     const res = await page.goto(path);
     expect(res?.status(), path).toBe(200);
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);

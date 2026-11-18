@@ -102,7 +102,7 @@ export default async function TransactionPage({ params }: PageProps<"/transactio
         </div>
       </section>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card title="Details">
           <dl>
             <Fact label="Category">
@@ -213,7 +213,7 @@ export default async function TransactionPage({ params }: PageProps<"/transactio
         <Card title="Correct">
           <ActionForm action={correctAction} submitLabel="Save changes" buttonClassName={buttonClass} testId="correct-form">
             <input type="hidden" name="id" value={t.id} />
-            <div className="grid gap-3 md:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               <label className="flex flex-col gap-1 text-xs font-medium text-muted">
                 Amount (₹)
                 <input

@@ -29,7 +29,7 @@ export default async function ExplainPage() {
                 <p className="mb-2 text-sm font-semibold break-words">{i.label}</p>
                 <ActionForm action={explainAction} submitLabel="Save" buttonClassName={buttonClass}>
                   <input type="hidden" name="id" value={i.id} />
-                  <div className="grid gap-3 md:grid-cols-2">
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                     <label className={label}>
                       Category
                       <select name="categoryId" defaultValue={i.categoryId ?? ""} required className={inputClass}>

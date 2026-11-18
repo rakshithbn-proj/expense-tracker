@@ -112,7 +112,7 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
           </ul>
         )}
         <ActionForm action={addAccountAction} submitLabel="Add account" buttonClassName={buttonClass} testId="add-account-form">
-          <div className="grid gap-3 md:grid-cols-4">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
             <label className={label}>
               Bank or issuer
               <input name="institutionName" required maxLength={80} placeholder="e.g. HDFC Bank" className={inputClass} />
@@ -206,7 +206,7 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
               <input type="checkbox" name="enabled" defaultChecked={explain.enabled} className="h-4 w-4" />
               Ask me on my iPhone why each payment was made
             </label>
-            <div className="grid gap-3 md:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               <label className={label}>
                 Ask at these times (India time, 24-hour)
                 <input name="slotTimes" required defaultValue={formatSlotTimes(parseSlotTimes(explain.slotTimes))} className={inputClass} />

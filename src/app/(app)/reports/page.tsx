@@ -41,9 +41,11 @@ const NET_SPENDING =
 
 function Table({ head, rows, foot }: { head: string[]; rows: ReactNode[][]; foot?: ReactNode[] }) {
   return (
-    <div className="-mx-4 overflow-x-auto px-4">
-      <table className="w-full min-w-[28rem] text-left text-sm tabular-nums">
-        <thead>
+    // On phones each row stacks: the first cell as a heading, then one "column name … value" line
+    // per cell, so nothing needs sideways scrolling. From sm up it's an ordinary table.
+    <div className="sm:-mx-4 sm:overflow-x-auto sm:px-4">
+      <table className="w-full text-left text-sm tabular-nums max-sm:block sm:min-w-[28rem]">
+        <thead className="max-sm:hidden">
           <tr className="text-xs text-muted">
             {head.map((h, i) => (
               <th key={h} className={`py-2 pr-3 font-medium ${i > 0 ? "text-right" : ""}`}>
@@ -52,30 +54,42 @@ function Table({ head, rows, foot }: { head: string[]; rows: ReactNode[][]; foot
             ))}
           </tr>
         </thead>
-        <tbody>
+        <tbody className="max-sm:block">
           {rows.map((r, i) => (
-            <tr key={i} className="border-t border-border">
+            <tr key={i} className="border-t border-border max-sm:block max-sm:py-2">
               {r.map((c, j) => (
-                <td key={j} className={`py-2 pr-3 ${j > 0 ? "text-right" : ""}`}>
+                <Cell key={j} index={j} label={head[j]}>
                   {c}
-                </td>
+                </Cell>
               ))}
             </tr>
           ))}
         </tbody>
         {foot && (
-          <tfoot>
-            <tr className="border-t-2 border-border font-semibold">
+          <tfoot className="max-sm:block">
+            <tr className="border-t-2 border-border font-semibold max-sm:block max-sm:py-2">
               {foot.map((c, j) => (
-                <td key={j} className={`py-2 pr-3 ${j > 0 ? "text-right" : ""}`}>
+                <Cell key={j} index={j} label={head[j]}>
                   {c}
-                </td>
+                </Cell>
               ))}
             </tr>
           </tfoot>
         )}
       </table>
     </div>
+  );
+}
+
+function Cell({ index, label, children }: { index: number; label: string; children: ReactNode }) {
+  if (index === 0) return <td className="py-2 pr-3 max-sm:block max-sm:py-0.5 max-sm:pr-0 max-sm:font-semibold">{children}</td>;
+  return (
+    <td
+      data-label={label}
+      className="py-2 pr-3 text-right max-sm:flex max-sm:items-baseline max-sm:justify-between max-sm:gap-3 max-sm:py-0.5 max-sm:pr-0 max-sm:before:text-xs max-sm:before:font-normal max-sm:before:text-muted max-sm:before:content-[attr(data-label)]"
+    >
+      {children}
+    </td>
   );
 }
 

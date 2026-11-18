@@ -26,9 +26,9 @@ export function BudgetMeter({
   const remaining = limitPaise - Math.max(0, spentPaise);
   return (
     <div>
-      <div className="mb-1 flex items-baseline justify-between gap-3 text-sm">
-        <span className="truncate font-medium">{label}</span>
-        <span className="shrink-0 tabular-nums">
+      <div className="mb-1 flex flex-wrap items-baseline justify-between gap-x-3 text-sm">
+        <span className="min-w-0 truncate font-medium">{label}</span>
+        <span className="ml-auto tabular-nums">
           {formatInr(Math.max(0, spentPaise))} <span className="text-muted">of {formatInr(limitPaise)}</span>
         </span>
       </div>
@@ -43,7 +43,7 @@ export function BudgetMeter({
       >
         <div className="h-full rounded-full" style={{ width: `${Math.min(percentUsed, 100)}%`, background: s.color }} />
       </div>
-      <div className="mt-1 flex justify-between text-xs text-muted">
+      <div className="mt-1 flex flex-wrap justify-between gap-x-3 text-xs text-muted">
         <span>
           <span
             aria-hidden
@@ -54,7 +54,7 @@ export function BudgetMeter({
           </span>
           {s.label} · {percentUsed}% used
         </span>
-        <span className="tabular-nums">{remaining >= 0 ? `${formatInr(remaining)} left` : `${formatInr(-remaining)} over`}</span>
+        <span className="ml-auto tabular-nums">{remaining >= 0 ? `${formatInr(remaining)} left` : `${formatInr(-remaining)} over`}</span>
       </div>
     </div>
   );

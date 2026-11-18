@@ -83,7 +83,7 @@ export default async function BudgetsPage({ searchParams }: PageProps<"/budgets"
         )}
       </Card>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {targets.map((target) => {
           const inForce = budgetInForce(rows.filter((r) => r.categoryId === target.id), month);
           const used = usage.get(target.id);

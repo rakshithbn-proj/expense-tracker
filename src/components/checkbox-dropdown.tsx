@@ -48,7 +48,7 @@ export function CheckboxDropdown({ name, label, values, options }: { name: strin
             <path d="M2.5 4.5 6 8l3.5-3.5" />
           </svg>
         </summary>
-        <fieldset className="absolute z-20 mt-1 flex max-h-72 w-full min-w-56 flex-col overflow-auto rounded-xl border border-border bg-surface p-1 shadow-lg">
+        <fieldset className="absolute z-20 mt-1 flex max-h-72 w-full flex-col sm:min-w-56 overflow-auto rounded-xl border border-border bg-surface p-1 shadow-lg">
           <legend className="sr-only">{label}</legend>
           {options.length === 0 && <span className="px-2 py-2 text-sm font-normal">Nothing to choose yet</span>}
           {options.map(([v, l]) => (
