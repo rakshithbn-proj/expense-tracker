@@ -17,7 +17,7 @@ import { captureCapabilities } from "@/server/capture/capabilities";
 import { listToExplain } from "@/server/explain/service";
 import { db } from "@/server/db/client";
 import { daysInMonth } from "@/server/finance/analytics";
-import { dailyAllowances } from "@/server/finance/daily-allowance-service";
+import { dailyAllowance } from "@/server/finance/daily-allowance-service";
 import { lookups, overview } from "@/server/finance/reports-service";
 import { listReasons } from "@/server/finance/transactions-service";
 import { ReasonPicker } from "./reason-picker";
@@ -41,13 +41,13 @@ export default async function OverviewPage({ searchParams }: PageProps<"/">) {
   // The whole page, budgets included, shows one "why".
   const { requested: requestedWhy, value: why, reason, options: whyOptions } = chooseWhy(query.why, reasons);
 
-  const [data, names, capabilities, toExplain, allowances] = await Promise.all([
+  const [data, names, capabilities, toExplain, allowance] = await Promise.all([
     overview(db(), user.id, month, today, reason),
     lookups(db(), user.id),
     captureCapabilities(db(), user.id),
     listToExplain(db(), user.id),
     // The daily allowance is about today, so it's shown for the current month only.
-    month === currentMonth ? dailyAllowances(db(), user.id, today, reason) : Promise.resolve([]),
+    month === currentMonth ? dailyAllowance(db(), user.id, today, reason) : Promise.resolve(null),
   ]);
   // Same evidence as the Automation page: a source counts only after it captured something real.
   const working = capabilities.filter((c) => c.mode === "Automatic" && c.lastSuccessAt !== null);
@@ -135,20 +135,13 @@ export default async function OverviewPage({ searchParams }: PageProps<"/">) {
         />
       </div>
 
-      {allowances.length > 0 && (
+      {allowance && (
         <Card title={reason ? `Daily allowance · ${reason}` : "Daily allowance"} action={<TextLink href={budgetsHref}>Budgets</TextLink>}>
-          <DailyAllowanceCard
-            allowances={allowances.map((a) => ({
-              key: a.categoryId ?? "overall",
-              label: a.categoryId ? catName(a.categoryId) : reason ? `All of ${reason}` : "Overall",
-              startMonth: a.startMonth,
-              today: a.today,
-            }))}
-          />
+          <DailyAllowanceCard allowance={{ label: reason ? `All of ${reason}` : "Overall", ...allowance }} />
           <Definition>
             Each day gets the budget not yet handed out, divided by the days left. Unspent money carries over to the next day. Spending
             more than the day&apos;s allowance closes the day at zero and lowers every later day. Refunds add back to their day. What&apos;s
-            left (or overspent) at the end of a month moves to the next month.
+            left (or overspent) at the end of a month moves to the next month. It works on the total budget across all categories; category budgets aren&apos;t split into days.
           </Definition>
         </Card>
       )}

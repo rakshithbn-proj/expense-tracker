@@ -12,47 +12,34 @@ import { loadAnalyzed } from "./reports-service";
 export const DAILY_ALLOWANCE_START = "2026-11";
 
 export type DailyAllowance = {
-  categoryId: string | null; // null = the overall budget (for the chosen "why")
   startMonth: string;
   today: AllowanceToday;
 };
 
-// One daily allowance per budget in force today, for one "why" (null = all spending). Spending is
-// the same net spending as every other total, so a budget and its allowance always agree.
-export async function dailyAllowances(db: Executor, userId: string, today: string, reason: string | null = null): Promise<DailyAllowance[]> {
+// The daily allowance of one "why"'s total budget (null = the all-spending budget), or null when
+// that total has no budget. Category budgets are deliberately left out (the user wants the math
+// on the total only). Spending is the same net spending as every other total.
+export async function dailyAllowance(db: Executor, userId: string, today: string, reason: string | null = null): Promise<DailyAllowance | null> {
   const currentMonth = today.slice(0, 7);
-  const rows = await listBudgets(db, userId, reason);
+  const rows = (await listBudgets(db, userId, reason)).filter((r) => r.categoryId === null);
+  if (rows.length === 0 || !budgetInForce(rows, currentMonth)) return null;
 
-  const byCategory = new Map<string | null, typeof rows>();
-  for (const r of rows) byCategory.set(r.categoryId, [...(byCategory.get(r.categoryId) ?? []), r]);
+  const first = rows.reduce((a, b) => (a.periodStart < b.periodStart ? a : b)).periodStart.slice(0, 7);
+  const startMonth = first > DAILY_ALLOWANCE_START ? first : DAILY_ALLOWANCE_START;
+  if (startMonth > currentMonth) return null;
 
-  const plans = [...byCategory.entries()]
-    .map(([categoryId, budgetRows]) => {
-      const first = budgetRows.reduce((a, b) => (a.periodStart < b.periodStart ? a : b)).periodStart.slice(0, 7);
-      return { categoryId, budgetRows, startMonth: first > DAILY_ALLOWANCE_START ? first : DAILY_ALLOWANCE_START };
-    })
-    .filter((p) => p.startMonth <= currentMonth && budgetInForce(p.budgetRows, currentMonth));
-  if (plans.length === 0) return [];
-
-  const earliest = plans.reduce((a, p) => (p.startMonth < a ? p.startMonth : a), currentMonth);
-  const loaded = await loadAnalyzed(db, userId, { start: `${earliest}-01`, endExclusive: addDays(today, 1) });
-  const items = loaded.items.filter((t) => t.effectPaise !== 0 && (reason === null || t.reason === reason));
-
-  const result = plans.map(({ categoryId, budgetRows, startMonth }) => {
-    const months: AllowanceMonth[] = [];
-    for (let m = startMonth; m <= currentMonth; m = addMonths(m, 1)) {
-      const active = budgetInForce(budgetRows, m);
-      months.push({ month: m, limitPaise: active ? decimalToPaise(active.limitAmount) : 0, dailySpendPaise: new Array(daysInMonthOf(m)).fill(0) });
-    }
-    const index = new Map(months.map((m) => [m.month, m]));
-    for (const t of items) {
-      if (categoryId !== null && t.effectCategoryId !== categoryId) continue;
-      const m = index.get(t.date.slice(0, 7));
-      if (m) m.dailySpendPaise[Number(t.date.slice(8, 10)) - 1] += t.effectPaise;
-    }
-    const next = budgetInForce(budgetRows, addMonths(currentMonth, 1));
-    return { categoryId, startMonth, today: allowanceToday(months, today, next ? decimalToPaise(next.limitAmount) : 0) };
-  });
-  // Overall first, then categories in a stable order.
-  return result.sort((a, b) => (a.categoryId === null ? -1 : b.categoryId === null ? 1 : a.categoryId.localeCompare(b.categoryId)));
+  const months: AllowanceMonth[] = [];
+  for (let m = startMonth; m <= currentMonth; m = addMonths(m, 1)) {
+    const active = budgetInForce(rows, m);
+    months.push({ month: m, limitPaise: active ? decimalToPaise(active.limitAmount) : 0, dailySpendPaise: new Array(daysInMonthOf(m)).fill(0) });
+  }
+  const index = new Map(months.map((m) => [m.month, m]));
+  const loaded = await loadAnalyzed(db, userId, { start: `${startMonth}-01`, endExclusive: addDays(today, 1) });
+  for (const t of loaded.items) {
+    if (t.effectPaise === 0 || (reason !== null && t.reason !== reason)) continue;
+    const m = index.get(t.date.slice(0, 7));
+    if (m) m.dailySpendPaise[Number(t.date.slice(8, 10)) - 1] += t.effectPaise;
+  }
+  const next = budgetInForce(rows, addMonths(currentMonth, 1));
+  return { startMonth, today: allowanceToday(months, today, next ? decimalToPaise(next.limitAmount) : 0) };
 }

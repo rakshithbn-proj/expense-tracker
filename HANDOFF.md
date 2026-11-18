@@ -224,8 +224,8 @@ formats: unrecognised alerts, SMS and receipts go to a masked review queue (kept
 Explain "why" options live in the Shortcut, not the app (the reason is free text; the filter
 lists what was used).
 
-**Daily allowance** (Overview, current month only; agreed 2026-11-18): every budget in force
-(overall and category, per "why") is handed out per day = budget not yet credited / days left.
+**Daily allowance** (Overview, current month only; agreed 2026-11-18): the chosen "why"'s
+**total** budget only (the user doesn't want it split by category) is handed out per day = budget not yet credited / days left.
 Unspent money carries in full to the next day. An overspend closes the day at zero and is spread
 over the remaining days. Refunds add back to their day. Month leftovers or overspends roll into
 the next month, spread over its days (deficits can span several months). Replayed from

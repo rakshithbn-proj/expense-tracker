@@ -6,21 +6,17 @@ import { projectCap, type AllowanceToday } from "@/lib/daily-allowance";
 import { formatInrWhole } from "@/lib/format";
 import { MoneyParseError, parseAmountToPaise } from "@/lib/money";
 
-export type AllowanceView = { key: string; label: string; startMonth: string; today: AllowanceToday };
+export type AllowanceView = { label: string; startMonth: string; today: AllowanceToday };
 
 const monthName = (month: string) =>
   new Date(`${month}-01T00:00:00Z`).toLocaleString("en-IN", { month: "long", year: "numeric", timeZone: "UTC" });
 
-// Today's allowance for each budget, plus a "what if I spend this?" calculator.
-export function DailyAllowanceCard({ allowances }: { allowances: AllowanceView[] }) {
+// Today's allowance for the chosen why's total budget, plus a "what if I spend this?" calculator.
+export function DailyAllowanceCard({ allowance }: { allowance: AllowanceView }) {
   return (
     <div className="flex flex-col gap-4">
-      <ul className="flex flex-col gap-4">
-        {allowances.map((a) => (
-          <AllowanceRow key={a.key} a={a} />
-        ))}
-      </ul>
-      <Calculator allowances={allowances} />
+      <AllowanceRow a={allowance} />
+      <Calculator allowance={allowance} />
     </div>
   );
 }
@@ -30,7 +26,7 @@ function AllowanceRow({ a }: { a: AllowanceView }) {
   const cap = projectCap(t);
   const over = t.leftTodayPaise < 0;
   return (
-    <li data-testid="daily-allowance-row">
+    <div data-testid="daily-allowance-row">
       <div className="flex items-baseline justify-between gap-3">
         <span className="truncate text-sm font-medium">{a.label}</span>
         <span className="shrink-0 text-2xl font-semibold tabular-nums" data-testid="daily-allowance-left">
@@ -63,15 +59,12 @@ function AllowanceRow({ a }: { a: AllowanceView }) {
             : `${formatInrWhole(-t.carryInPaise)} overspent in earlier months is being taken from this month.`}
         </div>
       )}
-    </li>
+    </div>
   );
 }
 
-function Calculator({ allowances }: { allowances: AllowanceView[] }) {
-  const [key, setKey] = useState(allowances[0]?.key ?? "");
+function Calculator({ allowance: chosen }: { allowance: AllowanceView }) {
   const [amount, setAmount] = useState("");
-  const chosen = allowances.find((a) => a.key === key) ?? allowances[0];
-  if (!chosen) return null;
 
   let paise: number | null = null;
   let error: string | null = null;
@@ -93,15 +86,6 @@ function Calculator({ allowances }: { allowances: AllowanceView[] }) {
     <div className="rounded-xl border border-border p-3">
       <div className="mb-2 text-sm font-medium">Calculator: what if I spend this today?</div>
       <div className="flex flex-wrap gap-2">
-        {allowances.length > 1 && (
-          <select aria-label="Budget" value={chosen.key} onChange={(e) => setKey(e.target.value)} className={`${inputClass} w-auto`}>
-            {allowances.map((a) => (
-              <option key={a.key} value={a.key}>
-                {a.label}
-              </option>
-            ))}
-          </select>
-        )}
         <input
           aria-label="Expense amount in rupees"
           inputMode="decimal"
