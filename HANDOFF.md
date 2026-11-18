@@ -192,6 +192,8 @@ npm.cmd run test:e2e     # build + Playwright (own throwaway DB on 5435, port 31
 - The E2E server deliberately blanks the Google env vars.
 - Tests with a fixed clock must pass `now` into queue/explain functions; never rely on `now()`.
 - PowerShell 5.1: use `npm.cmd`/`npx.cmd`; no `&&`.
+- **Vitest fails every file with "Cannot read properties of undefined (reading 'config')"** when
+  run from a lower-case `d:\` path (vitest loads twice). Run it from `D:\Rakshith\expense_tracker`.
 
 ## Code map
 
@@ -221,6 +223,15 @@ never delete. Manual and Quick Add entries never count as automatic capture. No 
 formats: unrecognised alerts, SMS and receipts go to a masked review queue (kept 7 days).
 Explain "why" options live in the Shortcut, not the app (the reason is free text; the filter
 lists what was used).
+
+**Daily allowance** (Overview, current month only; agreed 2026-11-18): every budget in force
+(overall and category, per "why") is handed out per day = budget not yet credited / days left.
+Unspent money carries in full to the next day. An overspend closes the day at zero and is spread
+over the remaining days. Refunds add back to their day. Month leftovers or overspends roll into
+the next month, spread over its days (deficits can span several months). Replayed from
+transactions every time, starting `DAILY_ALLOWANCE_START` (2026-11). Maths in
+`src/lib/daily-allowance.ts`, service `src/server/finance/daily-allowance-service.ts`, UI and
+calculator in `src/app/(app)/daily-allowance-card.tsx`.
 
 ## Open items after the move
 
