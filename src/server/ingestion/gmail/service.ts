@@ -270,7 +270,7 @@ export async function runCycle(db: Database, deps: QueueDeps) {
     processed += r.processed;
     if (r.processed + r.failed === 0) break;
   }
-  await purgeExpiredPayloads(db);
+  await purgeExpiredPayloads(db, deps.now?.() ?? new Date());
   return { queued, processed };
 }
 
