@@ -877,10 +877,16 @@ export async function transactionHistory(db: Executor, userId: string, id: strin
 // Summaries
 // ---------------------------------------------------------------------------
 
+// A transaction's "why": a linked refund or reversal takes its original purchase's reason
+// (the same rule loadAnalyzed() applies in memory).
+export const effectiveReason = sql`coalesce(nullif((select p.reason from transactions p where p.id = ${transactions.parentTransactionId}), ''), nullif(${transactions.reason}, ''))`;
+
+// `reason` narrows the summary to payments explained with that "why"; null means everything.
 export async function summarizeRange(
   db: Executor,
   userId: string,
   range: { start: string; endExclusive: string },
+  reason: string | null = null,
 ): Promise<PeriodSummary & { sampleTransactionCount: number; needsReviewCount: number }> {
   const rows = await db
     .select()
@@ -891,6 +897,7 @@ export async function summarizeRange(
         isNull(transactions.voidedAt),
         gte(transactions.transactionDate, range.start),
         lt(transactions.transactionDate, range.endExclusive),
+        ...(reason === null ? [] : [sql`${effectiveReason} = ${reason}`]),
       ),
     );
 
@@ -911,7 +918,7 @@ export async function summarizeRange(
   };
 }
 
-export async function summarizeMonth(db: Executor, userId: string, month: string) {
+export async function summarizeMonth(db: Executor, userId: string, month: string, reason: string | null = null) {
   const { start, end } = monthRange(month);
-  return summarizeRange(db, userId, { start, endExclusive: end });
+  return summarizeRange(db, userId, { start, endExclusive: end }, reason);
 }

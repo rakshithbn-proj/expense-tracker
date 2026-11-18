@@ -8,6 +8,8 @@ import { db } from "@/server/db/client";
 import { removeBudget, setBudget } from "@/server/finance/budgets-service";
 
 const categoryFrom = (fd: FormData) => formString(fd, "categoryId") || null;
+// The "why" the budget is for; blank means all spending.
+const reasonFrom = (fd: FormData) => formString(fd, "reason") || null;
 
 export async function setBudgetAction(_prev: ActionState, fd: FormData): Promise<ActionState> {
   const user = await requireUser();
@@ -15,6 +17,7 @@ export async function setBudgetAction(_prev: ActionState, fd: FormData): Promise
     const warn = Number(formString(fd, "warnAtPercent") || 80);
     await setBudget(db(), user.id, {
       categoryId: categoryFrom(fd),
+      reason: reasonFrom(fd),
       fromMonth: formString(fd, "fromMonth") ?? "",
       limitPaise: rupeesToPaise(formString(fd, "limit")),
       warnAtPercent: Number.isInteger(warn) ? warn : 80,
@@ -27,7 +30,7 @@ export async function setBudgetAction(_prev: ActionState, fd: FormData): Promise
 export async function removeBudgetAction(_prev: ActionState, fd: FormData): Promise<ActionState> {
   const user = await requireUser();
   return runAction(async () => {
-    await removeBudget(db(), user.id, categoryFrom(fd));
+    await removeBudget(db(), user.id, categoryFrom(fd), reasonFrom(fd));
     revalidatePath("/", "layout");
     return "Budget removed.";
   });

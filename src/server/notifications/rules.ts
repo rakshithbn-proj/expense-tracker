@@ -4,7 +4,7 @@ import { addDays, istDate, istMonth } from "@/lib/dates";
 import { formatDate, formatInr, formatMonth } from "@/lib/format";
 import type { Database } from "@/server/db/client";
 import { gmailConnections, sheetsConnections, sourceHealth, transactionSources, transactions, users } from "@/server/db/schema";
-import { budgetReport } from "@/server/finance/budgets-service";
+import { budgetReasons, budgetReport } from "@/server/finance/budgets-service";
 import { lookups } from "@/server/finance/reports-service";
 import { summarizeRange } from "@/server/finance/transactions-service";
 import { getExplainSettings, listToExplain } from "@/server/explain/service";
@@ -164,22 +164,28 @@ async function explainRule(db: Database, userId: string, now: Date): Promise<Des
 
 async function budgetRules(db: Database, userId: string, now: Date): Promise<DesiredNotification[]> {
   const month = istMonth(now);
-  const [report, names] = await Promise.all([budgetReport(db, userId, month), lookups(db, userId)]);
-  const all = [...(report.overall ? [report.overall] : []), ...report.categories];
+  const [reasons, names] = await Promise.all([budgetReasons(db, userId), lookups(db, userId)]);
+  // Each "why" has its own budgets (null = all spending).
+  const reports = await Promise.all(reasons.map((r) => budgetReport(db, userId, month, r)));
+  const all = reports.flatMap((report) =>
+    [...(report.overall ? [report.overall] : []), ...report.categories].map((b) => ({ ...b, reason: report.reason })),
+  );
   return all
     .filter((b) => b.state !== "ok")
     .map((b) => {
       const name = b.categoryId ? (names.categoryName.get(b.categoryId) ?? "Category") : "Overall";
-      const label = b.categoryId ? `${name} budget` : "Overall budget";
+      const label = `${b.reason ? `${b.reason} · ` : ""}${b.categoryId ? `${name} budget` : "Overall budget"}`;
+      // All-spending budgets keep the key they had before budgets had a "why".
+      const scope = b.reason ? `why=${b.reason}:` : "";
       return {
-        key: `budget:${month}:${b.categoryId ?? "overall"}:${b.state}`,
+        key: `budget:${month}:${scope}${b.categoryId ?? "overall"}:${b.state}`,
         kind: "budget" as const,
         severity: "warning" as const,
         title: b.state === "exceeded" ? `${label} exceeded` : `${label} at ${b.percentUsed}%`,
         body: `${formatInr(Math.max(0, b.spentPaise))} of ${formatInr(b.limitPaise)} spent in ${formatMonth(month)}${
           b.state === "exceeded" ? `, ${formatInr(-b.remainingPaise)} over.` : `; ${formatInr(b.remainingPaise)} left.`
         }`,
-        href: "/budgets",
+        href: `/budgets?why=${encodeURIComponent(b.reason ?? "all")}`,
       };
     });
 }

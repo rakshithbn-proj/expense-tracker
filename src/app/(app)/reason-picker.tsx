@@ -2,11 +2,10 @@
 
 import { useRouter } from "next/navigation";
 import { inputClass } from "@/components/ui";
+import { ALL_REASONS } from "./why";
 
-const ALL_REASONS = "all"; // same value the overview page reads
-
-// Chooses which "why" the whole overview shows; keeps the month in view.
-export function ReasonPicker({ month, value, reasons }: { month: string; value: string; reasons: string[] }) {
+// Chooses which "why" a page (Overview or Budgets) shows; keeps the month in view.
+export function ReasonPicker({ month, value, reasons, basePath = "/" }: { month?: string; value: string; reasons: string[]; basePath?: string }) {
   const router = useRouter();
   return (
     <label className="flex items-center gap-2 text-sm text-muted">
@@ -15,7 +14,7 @@ export function ReasonPicker({ month, value, reasons }: { month: string; value: 
         name="why"
         value={value}
         className={`${inputClass} w-auto py-1`}
-        onChange={(e) => router.push(`/?${new URLSearchParams({ month, why: e.target.value })}`)}
+        onChange={(e) => router.push(`${basePath}?${new URLSearchParams({ ...(month ? { month } : {}), why: e.target.value })}`)}
         data-testid="net-spending-why"
       >
         <option value={ALL_REASONS}>All spending</option>

@@ -81,7 +81,9 @@ pre-existing failure since ~Nov 2026: `gmail-ingestion.test.ts` "masked excerpt 
     reasons used. Migration `0007` renamed stored "Nagabhus" answers to "Nagabhushan" (the
     Shortcut's list had the short form). The **whole Overview** is narrowed to one "why"
     (dropdown in the header; defaults to Shared Rental Expense when that reason exists,
-    `?why=all` for everything); only Budgets stay on all spending. On Transactions, Why and
+    `?why=all` for everything), budgets included: **each "why" has its own budgets** (`budgets.reason`,
+    null = all spending; migration `0008`), and Budgets has the same Why picker. Reports → Budgets
+    and the API without `why` use the all-spending budgets. On Transactions, Why and
     Account are checkbox dropdowns (several at once; several whys are joined with a line break
     in the URL because a reason may contain a comma). The label shows amount · payee · method (UPI/Card…) · account · time.
     Guide: `docs/setup/explain-shortcut.md`.

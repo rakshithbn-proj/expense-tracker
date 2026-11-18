@@ -15,8 +15,9 @@ import { summarizeMonth } from "./transactions-service";
 export async function setBudget(
   db: Executor,
   userId: string,
-  input: { categoryId: string | null; fromMonth: string; limitPaise: number; warnAtPercent?: number },
+  input: { categoryId: string | null; reason?: string | null; fromMonth: string; limitPaise: number; warnAtPercent?: number },
 ) {
+  const reason = cleanReason(input.reason);
   if (!isValidMonth(input.fromMonth)) throw new DomainError("invalid_month", "Use a month like 2026-10.");
   if (!Number.isSafeInteger(input.limitPaise) || input.limitPaise <= 0) {
     throw new DomainError("invalid_limit", "The budget must be a positive amount.");
@@ -30,6 +31,7 @@ export async function setBudget(
   const values = {
     userId,
     categoryId: input.categoryId,
+    reason,
     periodStart: `${input.fromMonth}-01`,
     limitAmount: paiseToDecimal(input.limitPaise),
     warnAtPercent,
@@ -38,7 +40,7 @@ export async function setBudget(
     .insert(budgets)
     .values(values)
     .onConflictDoUpdate({
-      target: [budgets.userId, budgets.categoryId, budgets.periodStart],
+      target: [budgets.userId, budgets.categoryId, budgets.reason, budgets.periodStart],
       set: { limitAmount: values.limitAmount, warnAtPercent, updatedAt: new Date() },
     })
     .returning();
@@ -47,28 +49,56 @@ export async function setBudget(
     entityType: "budget",
     entityId: row.id,
     action: "set",
-    metadata: { categoryId: input.categoryId, fromMonth: input.fromMonth, limit: values.limitAmount },
+    metadata: { categoryId: input.categoryId, reason, fromMonth: input.fromMonth, limit: values.limitAmount },
   });
   return row;
 }
 
+// Blank means "all spending" (null). Otherwise the exact text used as a transaction's reason.
+function cleanReason(reason: string | null | undefined): string | null {
+  const r = reason?.trim() ?? "";
+  if (r.length > 500) throw new DomainError("invalid_reason", "The why is too long.");
+  return r === "" ? null : r;
+}
+
+const sameReason = (reason: string | null) => (reason === null ? isNull(budgets.reason) : eq(budgets.reason, reason));
+
 // Budgets are settings, not financial records: removing one deletes its rows (audited).
-export async function removeBudget(db: Executor, userId: string, categoryId: string | null) {
+export async function removeBudget(db: Executor, userId: string, categoryId: string | null, reasonInput: string | null = null) {
+  const reason = cleanReason(reasonInput);
   const deleted = await db
     .delete(budgets)
-    .where(and(eq(budgets.userId, userId), categoryId ? eq(budgets.categoryId, categoryId) : isNull(budgets.categoryId)))
+    .where(and(eq(budgets.userId, userId), categoryId ? eq(budgets.categoryId, categoryId) : isNull(budgets.categoryId), sameReason(reason)))
     .returning({ id: budgets.id });
-  await recordAudit(db, { userId, entityType: "budget", entityId: categoryId ?? "overall", action: "remove", metadata: { rows: deleted.length } });
+  await recordAudit(db, {
+    userId,
+    entityType: "budget",
+    entityId: categoryId ?? "overall",
+    action: "remove",
+    metadata: { reason, rows: deleted.length },
+  });
 }
 
-export async function listBudgets(db: Executor, userId: string) {
-  return db.select().from(budgets).where(eq(budgets.userId, userId));
+// Every budget row; with `reason` (null = all spending) only that "why"'s rows.
+export async function listBudgets(db: Executor, userId: string, reason?: string | null) {
+  return db
+    .select()
+    .from(budgets)
+    .where(and(eq(budgets.userId, userId), ...(reason === undefined ? [] : [sameReason(cleanReason(reason))])));
 }
 
-// Budget usage for one month, using the same accounting as every other total.
-export async function budgetReport(db: Executor, userId: string, month: string) {
+// The "why"s that have at least one budget (null = all spending).
+export async function budgetReasons(db: Executor, userId: string): Promise<(string | null)[]> {
+  const rows = await db.selectDistinct({ reason: budgets.reason }).from(budgets).where(eq(budgets.userId, userId));
+  return rows.map((r) => r.reason);
+}
+
+// Budget usage for one month and one "why" (null = all spending), using the same accounting as
+// every other total. A "why"'s budgets count only payments explained with that "why".
+export async function budgetReport(db: Executor, userId: string, month: string, reasonInput: string | null = null) {
   if (!isValidMonth(month)) throw new DomainError("invalid_month", "Use a month like 2026-10.");
-  const [rows, summary] = await Promise.all([listBudgets(db, userId), summarizeMonth(db, userId, month)]);
+  const reason = cleanReason(reasonInput);
+  const [rows, summary] = await Promise.all([listBudgets(db, userId, reason), summarizeMonth(db, userId, month, reason)]);
 
   const byCategory = new Map<string | null, typeof rows>();
   for (const r of rows) byCategory.set(r.categoryId, [...(byCategory.get(r.categoryId) ?? []), r]);
@@ -88,6 +118,7 @@ export async function budgetReport(db: Executor, userId: string, month: string) 
 
   return {
     month,
+    reason,
     overall,
     categories,
     uncategorizedSpendPaise: summary.byCategory[UNCATEGORIZED] ?? 0,

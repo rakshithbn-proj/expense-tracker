@@ -282,7 +282,7 @@ export default async function ReportsPage({ searchParams }: PageProps<"/reports"
       const current = reportsByMonth[reportsByMonth.length - 1];
       body = (
         <>
-          <Card title={`Budget usage · ${formatMonth(current.month)}`} action={<TextLink href="/budgets">Manage budgets</TextLink>}>
+          <Card title={`Budget usage (all spending) · ${formatMonth(current.month)}`} action={<TextLink href="/budgets">Manage budgets</TextLink>}>
             {!current.overall && current.categories.length === 0 ? (
               <EmptyState>
                 No budgets in force this month. <TextLink href="/budgets">Set one</TextLink>.

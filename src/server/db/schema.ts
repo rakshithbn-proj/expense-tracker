@@ -361,6 +361,8 @@ export const budgets = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     categoryId: uuid("category_id").references(() => categories.id, { onDelete: "cascade" }),
+    // The "why" this limit is for (same text as transactions.reason); null means all spending.
+    reason: text("reason"),
     periodType: budgetPeriodEnum("period_type").notNull().default("monthly"),
     periodStart: date("period_start", { mode: "string" }).notNull(),
     limitAmount: money("limit_amount").notNull(),
@@ -369,7 +371,7 @@ export const budgets = pgTable(
     ...timestamps,
   },
   (t) => [
-    unique("budgets_user_category_period_uq").on(t.userId, t.categoryId, t.periodStart).nullsNotDistinct(),
+    unique("budgets_user_category_reason_period_uq").on(t.userId, t.categoryId, t.reason, t.periodStart).nullsNotDistinct(),
     check("budgets_limit_positive", sql`${t.limitAmount} > 0`),
     check("budgets_period_start_first_of_month", sql`extract(day from ${t.periodStart}) = 1`),
     check("budgets_warn_percent", sql`${t.warnAtPercent} between 1 and 100`),

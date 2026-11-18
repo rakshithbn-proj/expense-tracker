@@ -20,16 +20,12 @@ import { daysInMonth } from "@/server/finance/analytics";
 import { lookups, overview } from "@/server/finance/reports-service";
 import { listReasons } from "@/server/finance/transactions-service";
 import { ReasonPicker } from "./reason-picker";
+import { chooseWhy } from "./why";
 
 export const metadata = { title: "Overview · Expenses" };
 
 const SPENDING_DEFINITION =
   "Net spending = purchases and fees (completed and pending) minus refunds. Own-account transfers, card bill payments, income, investments, cash withdrawals, failed and reversed payments are not spending.";
-
-// The whole page shows one "why"; it defaults to this one when the user has used it.
-// "all" means every payment.
-const DEFAULT_REASON = "shared rental expense";
-const ALL_REASONS = "all";
 
 export default async function OverviewPage({ searchParams }: PageProps<"/">) {
   const user = await requireUser();
@@ -40,9 +36,8 @@ export default async function OverviewPage({ searchParams }: PageProps<"/">) {
   const month = requested && isValidMonth(requested) && requested <= currentMonth ? requested : currentMonth;
 
   const reasons = await listReasons(db(), user.id);
-  const requestedWhy = z.string().max(500).optional().catch(undefined).parse(query.why);
-  const why = requestedWhy ?? reasons.find((r) => r.toLowerCase() === DEFAULT_REASON) ?? ALL_REASONS;
-  const reason = why === ALL_REASONS ? null : why;
+  // The whole page, budgets included, shows one "why".
+  const { requested: requestedWhy, value: why, reason, options: whyOptions } = chooseWhy(query.why, reasons);
 
   const [data, names, capabilities, toExplain] = await Promise.all([
     overview(db(), user.id, month, today, reason),
@@ -57,6 +52,7 @@ export default async function OverviewPage({ searchParams }: PageProps<"/">) {
   const catName = (id: string) => (id === "uncategorized" ? "Uncategorized" : (names.categoryName.get(id) ?? "Unknown category"));
   // Links into the transactions list carry the chosen "why" so the list matches what's shown here.
   const whyQuery = reason ? `&why=${encodeURIComponent(reason)}` : "";
+  const budgetsHref = `/budgets?why=${encodeURIComponent(why)}`;
   const monthQuery = `from=${month}-01&to=${month}-${String(daysInMonth(month)).padStart(2, "0")}${whyQuery}`;
 
   const vsPrevious = summary.netSpendPaise - data.previousSameDaysPaise;
@@ -72,7 +68,7 @@ export default async function OverviewPage({ searchParams }: PageProps<"/">) {
   return (
     <div className="flex flex-col gap-4">
       <PageHeader title="Overview">
-        <ReasonPicker month={month} value={why} reasons={reason && !reasons.includes(reason) ? [...reasons, reason] : reasons} />
+        <ReasonPicker month={month} value={why} reasons={whyOptions} />
         <MonthNav month={month} currentMonth={currentMonth} basePath="/" keep={requestedWhy ? { why: requestedWhy } : {}} />
       </PageHeader>
       <SampleBanner count={data.sampleCount} />
@@ -111,16 +107,16 @@ export default async function OverviewPage({ searchParams }: PageProps<"/">) {
         <Definition>
           {SPENDING_DEFINITION}
           {reason
-            ? ` This page shows only payments explained with “${reason}” (a refund counts under its purchase's reason). Budgets always cover all spending.`
+            ? ` This page, budgets included, shows only payments explained with “${reason}” (a refund counts under its purchase's reason).`
             : ""}
         </Definition>
       </section>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <StatTile
-          label={reason ? "Overall budget (all spending)" : "Overall budget"}
+          label={reason ? `${reason} budget` : "Overall budget"}
           value={overall ? (overall.remainingPaise >= 0 ? `${formatInrWhole(overall.remainingPaise)} left` : `${formatInrWhole(-overall.remainingPaise)} over`) : "Not set"}
-          detail={overall ? `${overall.percentUsed}% of ${formatInrWhole(overall.limitPaise)} used` : <TextLink href="/budgets">Set a budget</TextLink>}
+          detail={overall ? `${overall.percentUsed}% of ${formatInrWhole(overall.limitPaise)} used` : <TextLink href={budgetsHref}>Set a budget</TextLink>}
         />
         <StatTile
           label="Needs review"
@@ -176,14 +172,15 @@ export default async function OverviewPage({ searchParams }: PageProps<"/">) {
           </Card>
 
           <div className="grid gap-4 lg:grid-cols-2">
-            <Card title={reason ? "Budgets (all spending)" : "Budgets"} action={<TextLink href="/budgets">Manage</TextLink>}>
+            <Card title={reason ? `Budgets · ${reason}` : "Budgets"} action={<TextLink href={budgetsHref}>Manage</TextLink>}>
               {data.budgets.categories.length === 0 && !overall ? (
                 <EmptyState>
-                  No budgets yet. <TextLink href="/budgets">Set monthly limits</TextLink> for overall spending or a category.
+                  {reason ? `No budgets for “${reason}” yet. ` : "No budgets yet. "}
+                  <TextLink href={budgetsHref}>Set monthly limits</TextLink> for {reason ? "its total" : "overall spending"} or a category.
                 </EmptyState>
               ) : (
                 <div className="flex flex-col gap-4">
-                  {overall && <BudgetMeter label="Overall" {...overall} />}
+                  {overall && <BudgetMeter label={reason ? `All of ${reason}` : "Overall"} {...overall} />}
                   {data.budgets.categories.map((b) => (
                     <BudgetMeter key={b.categoryId} label={catName(b.categoryId!)} {...b} />
                   ))}

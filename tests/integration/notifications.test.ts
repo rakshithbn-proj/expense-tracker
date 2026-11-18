@@ -1,6 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
-import { gmailConnections, notifications, sheetsConnections, sourceHealth, transactionSources, users } from "@/server/db/schema";
+import { gmailConnections, notifications, sheetsConnections, sourceHealth, transactionSources, transactions, users } from "@/server/db/schema";
 import { createAccount } from "@/server/finance/accounts-service";
 import { setBudget } from "@/server/finance/budgets-service";
 import { listCategories } from "@/server/finance/categories-service";
@@ -184,6 +184,18 @@ describe("budget warnings", () => {
     await add({ amountPaise: 150_00 });
     await refresh();
     expect((await byKey(`budget:2026-10:${food}:exceeded`))!.title).toBe("Food & Dining budget exceeded");
+  });
+
+  it("warns per why, naming it", async () => {
+    await setBudget(testDb(), userId, { categoryId: null, reason: "Home Expense", fromMonth: "2026-10", limitPaise: 100_00 });
+    const t = await add({ amountPaise: 150_00 });
+    await testDb().update(transactions).set({ reason: "Home Expense" }).where(eq(transactions.id, t.id));
+    await add({ amountPaise: 5000_00 }); // other payments don't count
+    await refresh();
+    const n = (await byKey("budget:2026-10:why=Home Expense:overall:exceeded"))!;
+    expect(n.title).toBe("Home Expense · Overall budget exceeded");
+    expect(n.body).toContain("₹150");
+    expect(n.href).toBe("/budgets?why=Home%20Expense");
   });
 });
 

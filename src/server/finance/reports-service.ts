@@ -16,7 +16,7 @@ import {
 } from "./analytics";
 import { budgetReport } from "./budgets-service";
 import type { Executor } from "./db-types";
-import { toDto } from "./transactions-service";
+import { effectiveReason, toDto } from "./transactions-service";
 
 type Range = { start: string; endExclusive: string };
 
@@ -122,13 +122,9 @@ export async function lookups(db: Executor, userId: string) {
   };
 }
 
-// A transaction's "why", as loadAnalyzed() resolves it: a linked refund or reversal takes its
-// original purchase's reason.
-const effectiveReason = sql`coalesce(nullif((select p.reason from transactions p where p.id = ${transactions.parentTransactionId}), ''), nullif(${transactions.reason}, ''))`;
-
 // Everything the overview page shows for one month. `reason` narrows the whole page to the
-// payments explained with that "why" (null means everything); only budgets stay on all
-// spending, because their limits are for total spending.
+// payments explained with that "why" (null means everything), budgets included: each "why"
+// has its own limits.
 export async function overview(db: Executor, userId: string, month: string, today = istDate(new Date()), reason: string | null = null) {
   const { start, end } = monthRange(month);
   const historyStart = `${addMonths(month, -3)}-01`;
@@ -142,7 +138,7 @@ export async function overview(db: Executor, userId: string, month: string, toda
   const [loaded, earliest, budgets, recentRows, reviewRows, refundsAndReversals] = await Promise.all([
     loadAnalyzed(db, userId, { start: historyStart, endExclusive: end }),
     earliestTransactionDate(db, userId),
-    budgetReport(db, userId, month),
+    budgetReport(db, userId, month, reason),
     db
       .select()
       .from(transactions)
@@ -196,13 +192,15 @@ function countBy<T>(items: T[], keyOf: (t: T) => string): Record<string, number>
   return out;
 }
 
-// Suggested limits from the three complete months before `month`. Never saved automatically.
-export async function budgetSuggestions(db: Executor, userId: string, month: string) {
+// Suggested limits from the three complete months before `month`, for one "why" (null = all
+// spending). Never saved automatically.
+export async function budgetSuggestions(db: Executor, userId: string, month: string, reason: string | null = null) {
   const [history, earliest] = await Promise.all([
     loadAnalyzed(db, userId, { start: `${addMonths(month, -3)}-01`, endExclusive: `${month}-01` }),
     earliestTransactionDate(db, userId),
   ]);
-  return suggestBudgets(history.items, month, earliest);
+  const items = reason === null ? history.items : history.items.filter((t) => t.reason === reason);
+  return suggestBudgets(items, month, earliest);
 }
 
 // Data for the reports page over an arbitrary date range, plus six months of history.

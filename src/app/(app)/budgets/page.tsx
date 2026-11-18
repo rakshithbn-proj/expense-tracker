@@ -7,20 +7,29 @@ import { decimalToPaise } from "@/lib/money";
 import { requireUser } from "@/server/auth/dal";
 import { db } from "@/server/db/client";
 import { budgetInForce } from "@/server/finance/budget";
-import { budgetReport, listBudgets } from "@/server/finance/budgets-service";
+import { budgetReasons, budgetReport, listBudgets } from "@/server/finance/budgets-service";
 import { budgetSuggestions, lookups } from "@/server/finance/reports-service";
+import { listReasons } from "@/server/finance/transactions-service";
+import { ReasonPicker } from "../reason-picker";
+import { chooseWhy } from "../why";
 import { removeBudgetAction, setBudgetAction } from "./actions";
 
 export const metadata = { title: "Budgets · Expenses" };
 
-export default async function BudgetsPage() {
+export default async function BudgetsPage({ searchParams }: PageProps<"/budgets">) {
   const user = await requireUser();
   const month = istDate(new Date()).slice(0, 7);
+  const query = await searchParams;
+  // Each "why" has its own budgets; the picker works like the one on Overview.
+  const [used, withBudgets] = await Promise.all([listReasons(db(), user.id), budgetReasons(db(), user.id)]);
+  const known = [...new Set([...used, ...withBudgets.filter((r): r is string => r !== null)])].sort((a, b) => a.localeCompare(b));
+  const { value: why, reason, options } = chooseWhy(query.why, known);
+
   const [report, rows, names, suggestions] = await Promise.all([
-    budgetReport(db(), user.id, month),
-    listBudgets(db(), user.id),
+    budgetReport(db(), user.id, month, reason),
+    listBudgets(db(), user.id, reason),
     lookups(db(), user.id),
-    budgetSuggestions(db(), user.id, month),
+    budgetSuggestions(db(), user.id, month, reason),
   ]);
 
   const usage = new Map<string | null, NonNullable<typeof report.overall>>();
@@ -28,15 +37,19 @@ export default async function BudgetsPage() {
   for (const c of report.categories) usage.set(c.categoryId, c);
 
   const targets: { id: string | null; name: string }[] = [
-    { id: null, name: "Overall (all spending)" },
+    { id: null, name: reason ? `Overall (all of ${reason})` : "Overall (all spending)" },
     ...names.categories.filter((c) => c.isActive && c.systemKey !== "investments").map((c) => ({ id: c.id, name: c.name })),
   ];
 
   return (
     <div className="flex flex-col gap-4">
-      <PageHeader title="Budgets" />
+      <PageHeader title="Budgets">
+        <ReasonPicker basePath="/budgets" value={why} reasons={options} />
+      </PageHeader>
       <p className="text-sm text-muted">
-        Monthly limits for {formatMonth(month)}. A limit applies from the month you set it until you change it.
+        Monthly limits for {formatMonth(month)}
+        {reason ? `, counting only payments explained with “${reason}”` : ", counting all spending"}. Each “why” has its own limits. A limit applies
+        from the month you set it until you change it.
       </p>
 
       <Card title="Suggested limits">
@@ -57,6 +70,7 @@ export default async function BudgetsPage() {
                     </span>
                     <ActionForm action={setBudgetAction} submitLabel={`Use ${formatInr(s.suggestedPaise)}`} buttonClassName={secondaryButtonClass}>
                       <input type="hidden" name="categoryId" value={s.categoryId ?? ""} />
+                      <input type="hidden" name="reason" value={reason ?? ""} />
                       <input type="hidden" name="fromMonth" value={month} />
                       <input type="hidden" name="limit" value={(s.suggestedPaise / 100).toFixed(2)} />
                     </ActionForm>
@@ -78,6 +92,7 @@ export default async function BudgetsPage() {
               {used ? <BudgetMeter label="This month" {...used} /> : <p className="text-sm text-muted">No limit set.</p>}
               <ActionForm action={setBudgetAction} submitLabel={inForce ? "Update" : "Set limit"} buttonClassName={buttonClass} className="mt-3 flex flex-wrap items-end gap-3">
                 <input type="hidden" name="categoryId" value={target.id ?? ""} />
+                <input type="hidden" name="reason" value={reason ?? ""} />
                 <input type="hidden" name="fromMonth" value={month} />
                 <label className="flex flex-1 flex-col gap-1 text-xs font-medium text-muted">
                   Monthly limit (₹)
@@ -97,6 +112,7 @@ export default async function BudgetsPage() {
               {inForce && (
                 <ActionForm action={removeBudgetAction} submitLabel="Remove budget" pendingLabel="Removing…" buttonClassName="mt-2 text-sm text-muted underline" className="flex">
                   <input type="hidden" name="categoryId" value={target.id ?? ""} />
+                  <input type="hidden" name="reason" value={reason ?? ""} />
                 </ActionForm>
               )}
             </Card>

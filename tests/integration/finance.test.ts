@@ -4,7 +4,7 @@ import { DEFAULT_CATEGORIES } from "@/lib/finance-types";
 import { auditEvents, transactions, users } from "@/server/db/schema";
 import { DomainError, NotFoundError } from "@/server/errors";
 import { createAccount } from "@/server/finance/accounts-service";
-import { budgetReport, setBudget } from "@/server/finance/budgets-service";
+import { budgetReasons, budgetReport, removeBudget, setBudget } from "@/server/finance/budgets-service";
 import { ensureDefaultCategories, listCategories, updateCategory } from "@/server/finance/categories-service";
 import { upsertRule } from "@/server/finance/rules-service";
 import {
@@ -327,6 +327,41 @@ describe("budgets", () => {
     // Changing the limit for the same month replaces it rather than duplicating.
     await setBudget(testDb(), userId, { categoryId: cat.food_dining, fromMonth: MONTH, limitPaise: 500_00 });
     expect((await budgetReport(testDb(), userId, MONTH)).categories[0]).toMatchObject({ state: "exceeded" });
+  });
+
+  it("keeps separate budgets for each why, counting only that why's payments", async () => {
+    const setWhy = (id: string, reason: string) => testDb().update(transactions).set({ reason }).where(eq(transactions.id, id));
+    const rent = await create({ amountPaise: 800_00, categoryId: cat.food_dining });
+    await setWhy(rent.id, "Shared Rental Expense");
+    const mine = await create({ amountPaise: 300_00, categoryId: cat.food_dining });
+    await setWhy(mine.id, "Rakshith Personal");
+    await create({ amountPaise: 50_00, categoryId: cat.food_dining }); // not explained
+    // A refund counts under its purchase's why.
+    const refund = await create({ amountPaise: 100_00, direction: "credit", transactionType: "refund", categoryId: cat.food_dining });
+    await linkRefund(testDb(), userId, refund.id, rent.id);
+
+    await setBudget(testDb(), userId, { categoryId: null, fromMonth: MONTH, limitPaise: 10_000_00 });
+    await setBudget(testDb(), userId, { categoryId: null, reason: "Shared Rental Expense", fromMonth: MONTH, limitPaise: 1_000_00 });
+    await setBudget(testDb(), userId, { categoryId: cat.food_dining, reason: " Shared Rental Expense ", fromMonth: MONTH, limitPaise: 500_00 });
+
+    const all = await budgetReport(testDb(), userId, MONTH);
+    expect(all.overall).toMatchObject({ spentPaise: 1050_00 });
+    expect(all.categories).toEqual([]);
+
+    const rental = await budgetReport(testDb(), userId, MONTH, "Shared Rental Expense");
+    expect(rental.reason).toBe("Shared Rental Expense");
+    expect(rental.overall).toMatchObject({ spentPaise: 700_00, limitPaise: 1_000_00, percentUsed: 70 });
+    expect(rental.categories).toEqual([expect.objectContaining({ categoryId: cat.food_dining, spentPaise: 700_00, state: "exceeded" })]);
+
+    // A why without budgets reports none, even though the all-spending budget exists.
+    const personal = await budgetReport(testDb(), userId, MONTH, "Rakshith Personal");
+    expect(personal.overall).toBeNull();
+    expect((await budgetReasons(testDb(), userId)).sort()).toEqual([null, "Shared Rental Expense"].sort());
+
+    // Removing one why's budget leaves the others alone.
+    await removeBudget(testDb(), userId, null, "Shared Rental Expense");
+    expect((await budgetReport(testDb(), userId, MONTH, "Shared Rental Expense")).overall).toBeNull();
+    expect((await budgetReport(testDb(), userId, MONTH)).overall).not.toBeNull();
   });
 });
 
