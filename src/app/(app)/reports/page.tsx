@@ -1,9 +1,9 @@
-import Link from "next/link";
 import type { ReactNode } from "react";
 import { BarList } from "@/components/charts/bar-list";
 import { BudgetMeter } from "@/components/charts/budget-meter";
 import { ColumnChart } from "@/components/charts/column-chart";
 import { InsightList } from "@/components/insight-list";
+import { NavSelect } from "@/components/nav-select";
 import { TransactionRow } from "@/components/transaction-row";
 import { Card, Definition, EmptyState, PageHeader, SampleBanner, TextLink } from "@/components/ui";
 import { addDays, addMonths, daysBetween, istDate, isValidDate } from "@/lib/dates";
@@ -447,33 +447,12 @@ export default async function ReportsPage({ searchParams }: PageProps<"/reports"
   return (
     <div className="flex flex-col gap-4">
       <PageHeader title="Reports" />
-      <nav aria-label="Reports" className="-mx-4 overflow-x-auto px-4">
-        <ul className="flex gap-2 pb-1">
-          {REPORTS.map(([key, label]) => (
-            <li key={key}>
-              <Link
-                href={`/reports?${qs({ r: key })}`}
-                aria-current={key === report ? "page" : undefined}
-                className="block rounded-full border border-border bg-surface px-3 py-1.5 text-sm whitespace-nowrap aria-[current=page]:border-brand aria-[current=page]:bg-brand aria-[current=page]:text-brand-contrast"
-              >
-                {label}
-              </Link>
-            </li>
-          ))}
-        </ul>
-      </nav>
+      <div className="flex flex-wrap gap-2">
+        <NavSelect label="Report" value={`/reports?${qs({})}`} options={REPORTS.map(([key, label]) => ({ href: `/reports?${qs({ r: key })}`, label }))} />
+        <NavSelect label="Period" value={`/reports?${qs({})}`} options={presets.map(([label, f, t]) => ({ href: `/reports?${qs({ from: f, to: t })}`, label }))} />
+      </div>
       <form method="get" className="flex flex-wrap items-end gap-2 text-sm">
         <input type="hidden" name="r" value={report} />
-        {presets.map(([label, f, t]) => (
-          <Link
-            key={label}
-            href={`/reports?${qs({ from: f, to: t })}`}
-            aria-current={f === from && t === to ? "true" : undefined}
-            className="rounded-lg border border-border bg-surface px-3 py-1.5 aria-[current=true]:border-brand aria-[current=true]:font-semibold"
-          >
-            {label}
-          </Link>
-        ))}
         <label className="flex items-center gap-1 text-muted">
           From <input type="date" name="from" defaultValue={from} className="rounded-lg border border-border bg-surface px-2 py-1" />
         </label>
