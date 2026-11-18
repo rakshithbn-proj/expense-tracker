@@ -8,6 +8,7 @@ import { ALLOWED_DIRECTIONS, PAYMENT_METHODS, TRANSACTION_TYPES } from "@/lib/fi
 import {
   CAPTURE_LABELS,
   formatDate,
+  formatInr,
   formatDateTime,
   formatSignedInr,
   METHOD_LABELS,
@@ -18,6 +19,7 @@ import { requireUser } from "@/server/auth/dal";
 import { db } from "@/server/db/client";
 import { NotFoundError } from "@/server/errors";
 import { lookups } from "@/server/finance/reports-service";
+import { paiseToDecimal } from "@/lib/money";
 import { getTransaction, suggestLinks, transactionHistory } from "@/server/finance/transactions-service";
 import { sourceForTransaction } from "@/server/ingestion/gmail/service";
 import { correctAction, linkAction, unlinkAction, voidAction } from "../actions";
@@ -66,6 +68,7 @@ export default async function TransactionPage({ params }: PageProps<"/transactio
   const t = detail.transaction;
   const voided = !!t.voidedAt;
   const linked = !!(t.parentTransactionId || t.transferGroupId);
+  const amountEdited = t.originalAmountPaise !== null;
   const allowedTypes = TRANSACTION_TYPES.filter((type) => ALLOWED_DIRECTIONS[type].includes(t.direction));
   const row = (x: typeof t) => <TransactionRow key={x.id} t={x} categoryName={names.categoryName} accountName={names.accountName} />;
 
@@ -91,6 +94,11 @@ export default async function TransactionPage({ params }: PageProps<"/transactio
           {t.needsReview && <Badge tone="attention">Needs review: {t.reviewReason}</Badge>}
           {t.isSample && <Badge>Sample data</Badge>}
           {voided && <Badge tone="danger">Voided</Badge>}
+          {t.originalAmountPaise !== null && (
+            <span data-testid="amount-edited">
+              <Badge tone="info">Amount edited · was {formatInr(t.originalAmountPaise)}</Badge>
+            </span>
+          )}
         </div>
       </section>
 
@@ -206,6 +214,24 @@ export default async function TransactionPage({ params }: PageProps<"/transactio
           <ActionForm action={correctAction} submitLabel="Save changes" buttonClassName={buttonClass} testId="correct-form">
             <input type="hidden" name="id" value={t.id} />
             <div className="grid gap-3 md:grid-cols-2">
+              <label className="flex flex-col gap-1 text-xs font-medium text-muted">
+                Amount (₹)
+                <input
+                  name="amount"
+                  defaultValue={paiseToDecimal(t.amountPaise)}
+                  inputMode="decimal"
+                  required
+                  disabled={linked || amountEdited}
+                  className={inputClass}
+                />
+                {amountEdited ? (
+                  <span className="font-normal">Already edited once (was {formatInr(t.originalAmountPaise!)}).</span>
+                ) : linked ? (
+                  <span className="font-normal">Unlink first to change the amount.</span>
+                ) : (
+                  <span className="font-normal">You can edit the amount only once.</span>
+                )}
+              </label>
               <label className="flex flex-col gap-1 text-xs font-medium text-muted">
                 Category
                 <select name="categoryId" defaultValue={t.categoryId ?? ""} className={inputClass}>

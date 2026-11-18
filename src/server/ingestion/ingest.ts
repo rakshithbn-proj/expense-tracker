@@ -1,5 +1,5 @@
 import "server-only";
-import { and, eq, gte, isNull, lte, ne } from "drizzle-orm";
+import { and, eq, gte, isNull, lte, ne, sql } from "drizzle-orm";
 import { addDays } from "@/lib/dates";
 import type { AccountType, CaptureMethod } from "@/lib/finance-types";
 import { paiseToDecimal } from "@/lib/money";
@@ -53,6 +53,10 @@ export function asOwnTransfer<E extends Pick<CapturedEvent, "merchant" | "transa
   return ownNames.includes(nameKey(e.merchant)) ? { ...e, transactionType: "internal_transfer" } : e;
 }
 
+// The amount the bank reported: the user's own edit (say, to their share of a split) mustn't
+// stop a second alert for the same payment from matching.
+const reportedAmount = sql<string>`coalesce(${transactions.originalAmount}, ${transactions.amount})`;
+
 export async function ingestEvent(
   db: Database,
   userId: string,
@@ -71,7 +75,7 @@ export async function ingestEvent(
         and(
           eq(transactions.userId, userId),
           eq(transactions.referenceId, e.referenceId),
-          eq(transactions.amount, paiseToDecimal(e.amountPaise)),
+          eq(reportedAmount, paiseToDecimal(e.amountPaise)),
           isNull(transactions.voidedAt),
         ),
       )
@@ -90,7 +94,7 @@ export async function ingestEvent(
         and(
           eq(transactions.userId, userId),
           eq(transactions.financialAccountId, account.id),
-          eq(transactions.amount, paiseToDecimal(e.amountPaise)),
+          eq(reportedAmount, paiseToDecimal(e.amountPaise)),
           eq(transactions.direction, e.direction),
           ne(transactions.captureMethod, opts.captureMethod),
           isNull(transactions.voidedAt),

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { formatDayShort, formatSignedInr, STATUS_LABELS, TYPE_LABELS } from "@/lib/format";
+import { formatDayShort, formatInr, formatSignedInr, STATUS_LABELS, TYPE_LABELS } from "@/lib/format";
 import type { TransactionDto } from "@/server/finance/transactions-service";
 import { Badge } from "./ui";
 
@@ -37,6 +37,7 @@ export function TransactionRow({
             )}
             {t.needsReview && <Badge tone="attention">Needs review</Badge>}
             {t.isSample && <Badge>Sample</Badge>}
+            {t.originalAmountPaise !== null && <Badge tone="info">Edited · was {formatInr(t.originalAmountPaise)}</Badge>}
           </div>
         </div>
         <div

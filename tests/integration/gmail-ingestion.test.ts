@@ -4,7 +4,7 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { financialAccounts, gmailConnections, sourceHealth, transactionSources, transactions, users } from "@/server/db/schema";
 import type { GmailConfig } from "@/server/env";
 import { createAccount } from "@/server/finance/accounts-service";
-import { createTransaction } from "@/server/finance/transactions-service";
+import { correctTransaction, createTransaction } from "@/server/finance/transactions-service";
 import { GMAIL_SCOPE } from "@/server/ingestion/gmail/client";
 import { disconnect, maskExcerpt, processQueue, runCycle, saveConnection, syncGmail } from "@/server/ingestion/gmail/service";
 import { claimBatch, MAX_ATTEMPTS, purgeExpiredPayloads, resetForRetry } from "@/server/ingestion/queue";
@@ -136,6 +136,20 @@ describe("capturing real alert formats end to end", () => {
     const [captured] = await testDb().select().from(transactions).where(eq(transactions.id, rbl.transactionId!));
     expect(captured.needsReview).toBe(true);
     expect(captured.reviewReason).toMatch(/possible duplicate/);
+  });
+
+  it("still matches the bank's amount after the user edited it", async () => {
+    const card = await createAccount(testDb(), userId, { institutionName: "RBL Bank", accountName: "Card", accountType: "credit_card", maskedIdentifier: "6060" });
+    const { transaction: manual } = await createTransaction(
+      testDb(),
+      userId,
+      { transactionDate: "2026-10-11", amountPaise: 100000, direction: "debit", transactionType: "purchase", financialAccountId: card.id },
+      { captureMethod: "manual" },
+    );
+    await correctTransaction(testDb(), userId, manual.id, { amountPaise: 25000 });
+    await connect();
+    await runCycle(testDb(), deps());
+    expect((await sources()).find((s) => s.parserId === "rbl.card")!.matchStatus).toBe("possible_duplicate");
   });
 });
 

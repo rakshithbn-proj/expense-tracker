@@ -71,6 +71,13 @@
       "when": 1795017692343,
       "tag": "0009_rule_reason",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1795019028456,
+      "tag": "0010_transaction_original_amount",
+      "breakpoints": true
     }
   ]
 }

@@ -239,6 +239,28 @@ describe("corrections are audited and never erase history", () => {
     expect(cleared.transaction).toMatchObject({ merchantName: "Corner Store", paymentApp: null, notes: null });
   });
 
+  it("the amount can be edited once, keeping the earlier amount", async () => {
+    const t = await create({ amountPaise: 1200_00, categoryId: cat.food_dining });
+    // Sending the same amount isn't an edit.
+    await correctTransaction(testDb(), userId, t.id, { amountPaise: 1200_00, notes: "dinner" });
+    const edited = await correctTransaction(testDb(), userId, t.id, { amountPaise: 400_00 });
+    expect(edited.transaction).toMatchObject({ amountPaise: 400_00, originalAmountPaise: 1200_00 });
+    expect((await summarizeMonth(testDb(), userId, MONTH)).netSpendPaise).toBe(400_00);
+
+    await expect(correctTransaction(testDb(), userId, t.id, { amountPaise: 300_00 })).rejects.toThrow(/already been edited/);
+    // Other fields can still be corrected, and the unchanged amount sent with them is fine.
+    const later = await correctTransaction(testDb(), userId, t.id, { amountPaise: 400_00, notes: "split" });
+    expect(later.transaction).toMatchObject({ amountPaise: 400_00, originalAmountPaise: 1200_00, notes: "split" });
+    const audits = await testDb().select().from(auditEvents).where(eq(auditEvents.entityId, t.id));
+    expect(audits.map((a) => (a.metadata as { changed?: string }).changed).filter(Boolean)).toEqual(["notes", "amount", "notes"]);
+  });
+
+  it("refuses to change the amount of a linked transaction", async () => {
+    await create({ amountPaise: 100_00, merchantName: "M" });
+    const refund = await create({ amountPaise: 100_00, direction: "credit", transactionType: "refund", merchantName: "M" });
+    await expect(correctTransaction(testDb(), userId, refund.id, { amountPaise: 50_00 })).rejects.toThrow(/Unlink/);
+  });
+
   it("voiding keeps the row but removes it from totals and lists", async () => {
     const t = await create({ amountPaise: 300_00, categoryId: cat.food_dining });
     await voidTransaction(testDb(), userId, t.id, "entered twice");

@@ -51,6 +51,7 @@ export function toDto(r: Row) {
     merchantName: r.merchantName,
     originalDescription: r.originalDescription,
     amountPaise: decimalToPaise(r.amount),
+    originalAmountPaise: r.originalAmount === null ? null : decimalToPaise(r.originalAmount),
     currency: r.currency,
     direction: r.direction,
     transactionType: r.transactionType,
@@ -544,7 +545,13 @@ export async function correctTransaction(db: Database, userId: string, id: strin
     }
     if (patch.transactionType) update.transactionType = patch.transactionType;
     if (patch.transactionDate) update.transactionDate = patch.transactionDate;
-    if (patch.amountPaise !== undefined) update.amount = paiseToDecimal(patch.amountPaise);
+    if (patch.amountPaise !== undefined && patch.amountPaise !== decimalToPaise(before.amount)) {
+      // The amount can be edited once. The earlier amount is kept: it's shown as "edited, was …",
+      // and a later alert for the same payment still matches on it.
+      if (before.originalAmount !== null) throw new DomainError("amount_edited", "The amount has already been edited once.");
+      update.amount = paiseToDecimal(patch.amountPaise);
+      update.originalAmount = before.amount;
+    }
     if (patch.paymentMethod) update.paymentMethod = patch.paymentMethod;
     if (patch.paymentApp !== undefined) update.paymentApp = patch.paymentApp;
     if (patch.financialAccountId !== undefined) update.financialAccountId = patch.financialAccountId;
@@ -558,7 +565,7 @@ export async function correctTransaction(db: Database, userId: string, id: strin
 
     const [after] = await tx.update(transactions).set(update).where(eq(transactions.id, id)).returning();
 
-    const changed = Object.keys(update).filter((k) => k !== "updatedAt" && k !== "merchantNormalized");
+    const changed = Object.keys(update).filter((k) => k !== "updatedAt" && k !== "merchantNormalized" && k !== "originalAmount");
     const snapshot = (r: Row) => ({
       categoryId: r.categoryId,
       transactionType: r.transactionType,

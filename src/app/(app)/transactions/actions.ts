@@ -25,6 +25,7 @@ export async function correctAction(_prev: ActionState, fd: FormData): Promise<A
     const id = formString(fd, "id")!;
     const reason = formNullable(fd, "reason");
     const { ruleId } = await correctTransaction(db(), user.id, id, {
+      amountPaise: amountFromForm(fd),
       categoryId: formNullable(fd, "categoryId"),
       merchantName: formNullable(fd, "merchantName"),
       transactionType: (formString(fd, "transactionType") || undefined) as never,
@@ -42,6 +43,11 @@ export async function correctAction(_prev: ActionState, fd: FormData): Promise<A
       ? "Saved. Future transactions from this merchant will use this category and why, and won't be asked about."
       : "Saved. Future transactions from this merchant will use this category." : "Saved.";
   });
+}
+
+function amountFromForm(fd: FormData): number | undefined {
+  const typed = formString(fd, "amount")?.trim();
+  return typed ? rupeesToPaise(typed) : undefined;
 }
 
 export async function linkAction(_prev: ActionState, fd: FormData): Promise<ActionState> {

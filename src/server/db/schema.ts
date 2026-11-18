@@ -194,6 +194,9 @@ export const transactions = pgTable(
     merchantNormalized: text("merchant_normalized"),
     originalDescription: text("original_description"),
     amount: money("amount").notNull(),
+    // What the bank reported, kept when the user changes the amount (e.g. to their share of a
+    // bill split with friends). Captures still match duplicates on this. Null = never changed.
+    originalAmount: money("original_amount"),
     currency: text("currency").notNull().default("INR"),
     direction: directionEnum("direction").notNull(),
     transactionType: transactionTypeEnum("transaction_type").notNull(),

@@ -33,6 +33,7 @@ const tx = (over: Partial<TransactionDto> = {}): TransactionDto => ({
   merchantName: "Swiggy",
   originalDescription: null,
   amountPaise: 1234_50,
+  originalAmountPaise: null,
   currency: "INR",
   direction: "debit",
   transactionType: "purchase",
