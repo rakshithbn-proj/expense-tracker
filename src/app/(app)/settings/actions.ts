@@ -9,7 +9,7 @@ import { db } from "@/server/db/client";
 import { DomainError, NotFoundError } from "@/server/errors";
 import { createAccount, updateAccount } from "@/server/finance/accounts-service";
 import { createCategory, updateCategory } from "@/server/finance/categories-service";
-import { setRuleActive } from "@/server/finance/rules-service";
+import { setRuleActive, setRuleReason } from "@/server/finance/rules-service";
 import { env, sheetsConfig } from "@/server/env";
 import { updateExplainSettings } from "@/server/explain/service";
 import { createDeviceKey, revokeDeviceKey } from "@/server/ingestion/shortcut/keys";
@@ -71,6 +71,15 @@ export async function toggleRuleAction(_prev: ActionState, fd: FormData): Promis
     const active = formString(fd, "isActive") === "true";
     await setRuleActive(db(), user.id, formString(fd, "id")!, active);
     return done(active ? "Rule turned on." : "Rule turned off.");
+  });
+}
+
+export async function setRuleReasonAction(_prev: ActionState, fd: FormData): Promise<ActionState> {
+  const user = await requireUser();
+  return runAction(async () => {
+    const reason = formString(fd, "reason")?.trim() || null;
+    await setRuleReason(db(), user.id, formString(fd, "id")!, reason);
+    return done(reason ? "Saved. New payments matching this rule won't be asked about." : "Why cleared.");
   });
 }
 

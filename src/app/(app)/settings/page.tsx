@@ -5,6 +5,7 @@ import { requireUser } from "@/server/auth/dal";
 import { db } from "@/server/db/client";
 import { lookups } from "@/server/finance/reports-service";
 import { listRules } from "@/server/finance/rules-service";
+import { listReasons } from "@/server/finance/transactions-service";
 import { listDeviceKeys } from "@/server/ingestion/shortcut/keys";
 import { formatDateTime } from "@/lib/format";
 import { sheetsConfig } from "@/server/env";
@@ -20,6 +21,7 @@ import {
   syncSheetsNowAction,
   updateExplainSettingsAction,
   toggleAccountAction,
+  setRuleReasonAction,
   toggleRuleAction,
   updateCategoryAction,
 } from "./actions";
@@ -76,9 +78,10 @@ function isSheetsConfigured() {
 export default async function SettingsPage({ searchParams }: PageProps<"/settings">) {
   const user = await requireUser();
   const notice = (await searchParams).sheets;
-  const [names, rules, keys, sheets] = await Promise.all([
+  const [names, rules, reasons, keys, sheets] = await Promise.all([
     lookups(db(), user.id),
     listRules(db(), user.id),
+    listReasons(db(), user.id),
     listDeviceKeys(db(), user.id),
     getSheetsConnection(db(), user.id),
   ]);
@@ -321,22 +324,47 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
         ) : (
           <ul className="flex flex-col">
             {rules.map((r) => (
-              <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 border-t border-border py-2 text-sm first:border-t-0">
-                <span>
-                  {MATCH_LABELS[r.matchType]} “{r.matchValue}” → <strong>{names.categoryName.get(r.categoryId)}</strong>{" "}
-                  <span className="text-muted">· priority {r.priority}</span> {r.isSample && <Badge>Sample</Badge>} {!r.isActive && <Badge>Off</Badge>}
-                </span>
-                <ActionForm action={toggleRuleAction} submitLabel={r.isActive ? "Turn off" : "Turn on"} buttonClassName={linkButton} className="flex">
+              <li key={r.id} className="flex flex-col gap-2 border-t border-border py-2 text-sm first:border-t-0">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span>
+                    {MATCH_LABELS[r.matchType]} “{r.matchValue}” → <strong>{names.categoryName.get(r.categoryId)}</strong>
+                    {r.reason && (
+                      <>
+                        {" "}· why: <strong>{r.reason}</strong>
+                      </>
+                    )}{" "}
+                    <span className="text-muted">· priority {r.priority}</span> {r.isSample && <Badge>Sample</Badge>} {!r.isActive && <Badge>Off</Badge>}
+                  </span>
+                  <ActionForm action={toggleRuleAction} submitLabel={r.isActive ? "Turn off" : "Turn on"} buttonClassName={linkButton} className="flex">
+                    <input type="hidden" name="id" value={r.id} />
+                    <input type="hidden" name="isActive" value={String(!r.isActive)} />
+                  </ActionForm>
+                </div>
+                <ActionForm action={setRuleReasonAction} submitLabel="Save why" buttonClassName={linkButton} className="flex flex-wrap items-end gap-2">
                   <input type="hidden" name="id" value={r.id} />
-                  <input type="hidden" name="isActive" value={String(!r.isActive)} />
+                  <input
+                    name="reason"
+                    defaultValue={r.reason ?? ""}
+                    list="rule-reasons"
+                    maxLength={500}
+                    placeholder="Why (optional), e.g. Home Expense"
+                    aria-label={`Why for “${r.matchValue}”`}
+                    className={`${inputClass} max-w-xs`}
+                  />
                 </ActionForm>
               </li>
             ))}
           </ul>
         )}
+        <datalist id="rule-reasons">
+          {reasons.map((r) => (
+            <option key={r} value={r} />
+          ))}
+        </datalist>
         <Definition>
           Rules apply to new transactions only, highest priority first (older rules win ties). Turning a rule off doesn&apos;t change transactions it
-          already categorized.
+          already categorized. A rule with a why answers its payments completely: they get that why and the iPhone Explain prompt doesn&apos;t ask about
+          them.
         </Definition>
       </Card>
     </div>

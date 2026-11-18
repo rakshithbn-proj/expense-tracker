@@ -38,7 +38,9 @@ export async function correctAction(_prev: ActionState, fd: FormData): Promise<A
       createRule: fd.get("createRule") === "on",
     });
     revalidatePath("/", "layout");
-    return ruleId ? "Saved. Future transactions from this merchant will use this category." : "Saved.";
+    return ruleId ? reason
+      ? "Saved. Future transactions from this merchant will use this category and why, and won't be asked about."
+      : "Saved. Future transactions from this merchant will use this category." : "Saved.";
   });
 }
 

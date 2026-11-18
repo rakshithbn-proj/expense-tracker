@@ -271,7 +271,7 @@ export default async function TransactionPage({ params }: PageProps<"/transactio
             {t.merchantName && (
               <label className="flex items-center gap-2 text-sm">
                 <input type="checkbox" name="createRule" className="h-4 w-4" />
-                Always use this category for “{t.merchantName}”
+                Always use this category (and why, if given) for “{t.merchantName}”
               </label>
             )}
           </ActionForm>

@@ -177,6 +177,9 @@ export async function createTransaction(
     // Category: explicit choice, then the user's rules, then a type default.
     let categoryId = input.categoryId ?? null;
     let categorySource: "user" | "rule" | "type_default" | null = categoryId ? "user" : null;
+    // A rule that also carries a "why" answers the payment completely, so the iPhone Explain
+    // prompt skips it.
+    let ruleReason: string | null = null;
     if (!categoryId && (SPENDING_TYPES.includes(input.transactionType) || input.transactionType === "refund")) {
       const rule = matchCategoryRule(await loadActiveRules(tx, userId), {
         merchantNormalized,
@@ -185,6 +188,7 @@ export async function createTransaction(
       if (rule) {
         categoryId = rule.categoryId;
         categorySource = "rule";
+        ruleReason = rule.reason?.trim() || null;
       }
     }
     if (!categoryId && input.transactionType === "investment") {
@@ -221,6 +225,7 @@ export async function createTransaction(
         deduplicationKey: input.deduplicationKey,
         captureMethod: origin.captureMethod,
         notes: input.notes,
+        ...(ruleReason ? { reason: ruleReason, explainedAt: new Date() } : {}),
         isSample: origin.isSample ?? false,
         needsReview: reviewReasons.length > 0,
         reviewReason: reviewReasons.join("; ") || null,
@@ -584,6 +589,9 @@ export async function correctTransaction(db: Database, userId: string, id: strin
         matchType: "merchant_exact",
         matchValue: after.merchantNormalized,
         categoryId: after.categoryId,
+        // The rule remembers the why too, so matching payments aren't asked about again.
+        // A blank why leaves the rule's existing one alone.
+        reason: after.reason ?? undefined,
       });
     }
     return { transaction: toDto(after), ruleId: rule?.id ?? null };

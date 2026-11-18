@@ -50,7 +50,7 @@ export default async function ExplainPage() {
                   </div>
                   <label className="flex items-center gap-2 text-sm">
                     <input type="checkbox" name="remember" className="h-4 w-4" />
-                    Always use this category for this payee
+                    Always use this category and why for this payee
                   </label>
                 </ActionForm>
               </li>

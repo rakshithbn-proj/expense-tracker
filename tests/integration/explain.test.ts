@@ -13,6 +13,7 @@ import {
 } from "@/server/explain/service";
 import { createAccount } from "@/server/finance/accounts-service";
 import { listCategories } from "@/server/finance/categories-service";
+import { setRuleReason, upsertRule } from "@/server/finance/rules-service";
 import { createTransaction, type CreateTransactionInput } from "@/server/finance/transactions-service";
 import { createOwner } from "@/server/users";
 import { closeTestDb, resetDb, testDb } from "../support/db";
@@ -148,6 +149,29 @@ describe("answering", () => {
     await explainTransaction(testDb(), userId, t.id, { categoryId: cat.shopping, remember: true });
     const rules = await testDb().select().from(categoryRules);
     expect(rules).toMatchObject([{ matchValue: "AMAZON", categoryId: cat.shopping }]);
+  });
+
+  it("doesn't ask about payments matched by a rule that has a why", async () => {
+    const t = await capture(ist("2026-10-27", "10:00"));
+    await explainTransaction(testDb(), userId, t.id, { categoryId: cat.shopping, reason: "Home Expense", remember: true });
+    expect(await testDb().select().from(categoryRules)).toMatchObject([{ matchValue: "AMAZON", categoryId: cat.shopping, reason: "Home Expense" }]);
+
+    const next = await capture(ist("2026-10-27", "11:00"));
+    expect(next).toMatchObject({ categoryId: cat.shopping, reason: "Home Expense" });
+    expect(next.explainedAt).not.toBeNull();
+    // A rule with a category but no why still gets asked about.
+    const other = await capture(ist("2026-10-27", "11:05"), { merchantName: "SWIGGY" });
+    await setRuleReason(testDb(), userId, (await upsertRule(testDb(), userId, { matchType: "merchant_exact", matchValue: "ZOMATO", categoryId: cat.food_dining })).id, "  ");
+    const zomato = await capture(ist("2026-10-27", "11:10"), { merchantName: "ZOMATO" });
+    expect(zomato).toMatchObject({ categoryId: cat.food_dining, reason: null, explainedAt: null });
+    expect((await listToExplain(testDb(), userId, ist("2026-10-27", "12:30"))).map((i) => i.id)).toEqual([other.id, zomato.id]);
+  });
+
+  it("keeps a rule's why when it's re-remembered without one", async () => {
+    const t = await capture(ist("2026-10-27", "10:00"));
+    const rule = await upsertRule(testDb(), userId, { matchType: "merchant_exact", matchValue: "AMAZON", categoryId: cat.shopping, reason: "Home Expense" });
+    await explainTransaction(testDb(), userId, t.id, { categoryId: cat.food_dining, remember: true });
+    expect(await testDb().select().from(categoryRules)).toMatchObject([{ id: rule.id, categoryId: cat.food_dining, reason: "Home Expense" }]);
   });
 
   it("rejects an unknown category", async () => {

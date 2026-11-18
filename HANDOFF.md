@@ -86,6 +86,9 @@ pre-existing failure since ~Nov 2026: `gmail-ingestion.test.ts` "masked excerpt 
     and the API without `why` use the all-spending budgets. On Transactions, Why and
     Account are checkbox dropdowns (several at once; several whys are joined with a line break
     in the URL because a reason may contain a comma). The label shows amount · payee · method (UPI/Card…) · account · time.
+    Category rules can also carry a **why** (`category_rules.reason`, migration `0009`; set in
+    Settings → Category rules, or by ticking "Always use…" with a why). A new payment matched
+    by a rule with a why gets that why and is marked explained, so the Shortcut skips it.
     Guide: `docs/setup/explain-shortcut.md`.
 - **PC network (temporary until the move):** the PC was given a manual Wi-Fi IP. It was
   mistyped once (`19.168.0.2`, mask /32), which made every Shortcut time out. Correct is

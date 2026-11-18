@@ -162,6 +162,9 @@ export const categoryRules = pgTable(
       .references(() => categories.id, { onDelete: "cascade" }),
     // Higher wins; ties go to the older rule.
     priority: integer("priority").notNull().default(100),
+    // Optional "why" filed with the category. A payment matched by a rule that has one is
+    // fully answered, so the iPhone Explain prompt doesn't ask about it.
+    reason: text("reason"),
     isActive: boolean("is_active").notNull().default(true),
     isSample: boolean("is_sample").notNull().default(false),
     ...timestamps,

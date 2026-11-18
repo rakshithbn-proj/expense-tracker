@@ -10,6 +10,7 @@ const ruleSchema = z.object({
   matchType: z.enum(RULE_MATCH_TYPES),
   matchValue: z.string().trim().min(2).max(100),
   categoryId: z.string().uuid(),
+  reason: z.string().trim().max(500).nullable().optional(),
   priority: z.number().int().min(0).max(1000).optional(),
 });
 
